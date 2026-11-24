@@ -27,13 +27,6 @@ interface PressKitModalProps {
   onCopiedToast?: () => void;
 }
 
-const EVIDENCE_GALLERY_CYCLE = [
-  '/evidence/wire_before.jpg',
-  '/evidence/road_before.jpg',
-  '/evidence/drain_before.jpg',
-  '/evidence/garbage_before.jpg',
-];
-
 type DossierTab = 'news' | 'rti' | 'social';
 
 function renderInlineText(line: string): React.ReactNode {
@@ -194,6 +187,15 @@ export const PressKitModal: React.FC<PressKitModalProps> = ({
       active = false;
     };
   }, [clusterId, allReports]);
+
+  const galleryReports = useMemo(() => {
+    if (!data || data.reports.length === 0) return [];
+    const leadCategory = (data.reports[0].category || '').toLowerCase();
+    const sameCategory = data.reports.filter(
+      (r) => (r.category || '').toLowerCase() === leadCategory
+    );
+    return sameCategory.length > 0 ? sameCategory : [data.reports[0]];
+  }, [data]);
 
   const formattedOutputs = useMemo(() => {
     if (!data || data.reports.length === 0) {
@@ -537,7 +539,7 @@ ${data.reports
               <div>
                 <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center justify-between">
                   <span>
-                    Corroborated Photo Evidence Gallery ({data.report_count} Citizen Reports)
+                    Corroborated Photo Evidence Gallery ({galleryReports.length} Citizen Reports)
                   </span>
                   <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
@@ -546,42 +548,43 @@ ${data.reports
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {data.reports.map((report, idx) => (
-                    <div
-                      key={report.id}
-                      className="border border-slate-200 rounded-xl overflow-hidden bg-white p-2.5 text-xs space-y-1.5 shadow-xs"
-                    >
-                      <div className="relative h-28 rounded-lg overflow-hidden bg-slate-200">
-                        <img
-                          src={
-                            report.image_url && !report.image_url.startsWith('/evidence/')
-                              ? report.image_url
-                              : data.reports.length === 1
-                              ? report.image_url || getAlignedCivicPhoto(report).beforeUrl
-                              : EVIDENCE_GALLERY_CYCLE[idx % EVIDENCE_GALLERY_CYCLE.length]
-                          }
-                          alt={report.title}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              EVIDENCE_GALLERY_CYCLE[idx % EVIDENCE_GALLERY_CYCLE.length];
-                          }}
-                        />
-                        <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-[#0B1120]/90 text-[10px] font-extrabold text-amber-400 font-mono">
-                          Evidence #{idx + 1}
-                        </span>
+                  {galleryReports.map((report, idx) => {
+                    const alignedBefore = getAlignedCivicPhoto(report).beforeUrl;
+                    const displaySrc =
+                      report.image_url?.startsWith('data:image/') ||
+                      report.image_url?.startsWith('blob:')
+                        ? report.image_url
+                        : alignedBefore;
+                    return (
+                      <div
+                        key={report.id}
+                        className="border border-slate-200 rounded-xl overflow-hidden bg-white p-2.5 text-xs space-y-1.5 shadow-xs"
+                      >
+                        <div className="relative h-28 rounded-lg overflow-hidden bg-slate-200">
+                          <img
+                            src={displaySrc}
+                            alt={report.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = alignedBefore;
+                            }}
+                          />
+                          <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-[#0B1120]/90 text-[10px] font-extrabold text-amber-400 font-mono">
+                            Evidence #{idx + 1}
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{report.title}</div>
+                        <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span>{new Date(report.created_at).toLocaleString()}</span>
+                        </div>
+                        <div className="text-[9px] font-mono text-slate-600 truncate flex items-center gap-1 bg-slate-50 p-1.5 rounded border border-slate-200">
+                          <Hash className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span className="truncate">{report.evidence_hash}</span>
+                        </div>
                       </div>
-                      <div className="font-bold text-slate-900 line-clamp-1">{report.title}</div>
-                      <div className="text-[10px] text-slate-500 truncate flex items-center gap-1">
-                        <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span>{new Date(report.created_at).toLocaleString()}</span>
-                      </div>
-                      <div className="text-[9px] font-mono text-slate-600 truncate flex items-center gap-1 bg-slate-50 p-1.5 rounded border border-slate-200">
-                        <Hash className="w-3 h-3 text-amber-600 shrink-0" />
-                        <span className="truncate">{report.evidence_hash}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

@@ -65,8 +65,8 @@ function getPublicSafetyImpact(report: Report): string {
   if (cat.includes('dump') || cat.includes('sanitation')) {
     return 'Accumulated municipal waste and construction debris obstruct primary storm drainage, risking vector-borne disease and flash waterlogging.';
   }
-  if (cat.includes('water')) {
-    return 'Stagnant waterlogging erodes road sub-base and blocks emergency and pedestrian access across the sector.';
+  if (cat.includes('water') || cat.includes('drain') || cat.includes('flood')) {
+    return 'Stagnant waterlogging and blocked drainage channels erode road sub-base and block emergency and pedestrian access across the sector.';
   }
   return 'Corroborated public infrastructure hazard impacting daily commuter safety and municipal service standards.';
 }
@@ -107,7 +107,13 @@ function getActionMandate(report: Report): {
       rtiStatutoryWindow,
     };
   }
-  if (cat.includes('dump') || cat.includes('sanitation') || cat.includes('water')) {
+  if (
+    cat.includes('dump') ||
+    cat.includes('sanitation') ||
+    cat.includes('water') ||
+    cat.includes('drain') ||
+    cat.includes('flood')
+  ) {
     const isRoutineDrain = report.severity <= 6 && !titleLower.includes('overflow');
     return {
       department: 'GNIDA Public Health, Drainage & Solid Waste Management Cell',

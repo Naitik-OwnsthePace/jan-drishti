@@ -1,5 +1,5 @@
-// Real Local Photographic Evidence Mapping (/evidence/*.jpg) + Varied Resolution Clocks & Honest Data Labels
-// Zero inline SVG cartoons (data:image/svg+xml) and zero random stock URLs.
+// Real Local Photographic Evidence Mapping (/evidence/*.jpg) + Client Canvas JPEG Compression
+// Strict 1-to-1 category/headline alignment; zero stock URLs and zero overwriting of custom uploads.
 
 export const LOCAL_EVIDENCE_PHOTOS = {
   wire_before: '/evidence/wire_before.jpg',
@@ -10,21 +10,94 @@ export const LOCAL_EVIDENCE_PHOTOS = {
   drain_after: '/evidence/drain_after.jpg',
   garbage_before: '/evidence/garbage_before.jpg',
   garbage_after: '/evidence/garbage_after.jpg',
-};
+} as const;
+
+export function isCustomUploadedDataUrl(url?: string | null): boolean {
+  if (!url) return false;
+  return url.startsWith('data:image/') || url.startsWith('blob:');
+}
+
+/**
+ * Compress any user-uploaded image File on an offscreen HTML5 Canvas
+ * (max-width: 900px, JPEG quality: 0.8) and return a persistent Data URL.
+ */
+export function compressImageFileToDataUrl(
+  file: File,
+  maxWidth: number = 900,
+  quality: number = 0.8
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      try {
+        let targetWidth = img.naturalWidth || img.width || maxWidth;
+        let targetHeight = img.naturalHeight || img.height || maxWidth;
+
+        if (targetWidth > maxWidth) {
+          const ratio = maxWidth / targetWidth;
+          targetWidth = maxWidth;
+          targetHeight = Math.max(1, Math.round(targetHeight * ratio));
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Canvas 2D context unavailable');
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, targetWidth, targetHeight);
+        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+        const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
+        URL.revokeObjectURL(objectUrl);
+        resolve(jpegDataUrl);
+      } catch {
+        URL.revokeObjectURL(objectUrl);
+        // Fallback to direct FileReader Data URL if canvas encoding fails
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read uploaded image file'));
+        reader.readAsDataURL(file);
+      }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to decode uploaded image file'));
+      reader.readAsDataURL(file);
+    };
+
+    img.src = objectUrl;
+  });
+}
 
 export function getAlignedCivicPhoto(report: {
   id?: string;
   category?: string;
   title?: string;
+  summary?: string;
 }): { beforeUrl: string; afterUrl: string; sceneLabel: string } {
-  const title = (report.title || '').toLowerCase();
   const cat = (report.category || '').toLowerCase();
+  const text = `${report.title || ''} ${report.summary || ''}`.toLowerCase();
 
+  // 1. Explicit Category Priority (strict 1-to-1 domain mapping)
+  if (cat.includes('electric') || cat.includes('wire')) {
+    return {
+      beforeUrl: LOCAL_EVIDENCE_PHOTOS.wire_before,
+      afterUrl: LOCAL_EVIDENCE_PHOTOS.wire_after,
+      sceneLabel: 'Electrical Feeder & Cable Safety Evidence',
+    };
+  }
   if (
+    cat.includes('drain') ||
     cat.includes('water') ||
-    title.includes('waterlog') ||
-    title.includes('storm drain') ||
-    title.includes('drain overflow')
+    cat.includes('flood') ||
+    cat.includes('sewer')
   ) {
     return {
       beforeUrl: LOCAL_EVIDENCE_PHOTOS.drain_before,
@@ -32,14 +105,22 @@ export function getAlignedCivicPhoto(report: {
       sceneLabel: 'Storm Drain & Waterlogging Evidence',
     };
   }
-
+  if (
+    cat.includes('road') ||
+    cat.includes('pothole') ||
+    cat.includes('asphalt')
+  ) {
+    return {
+      beforeUrl: LOCAL_EVIDENCE_PHOTOS.road_before,
+      afterUrl: LOCAL_EVIDENCE_PHOTOS.road_after,
+      sceneLabel: 'Arterial Road & Asphalt Evidence',
+    };
+  }
   if (
     cat.includes('dump') ||
     cat.includes('sanitation') ||
-    title.includes('garbage') ||
-    title.includes('rubble') ||
-    title.includes('debris') ||
-    title.includes('waste')
+    cat.includes('garbage') ||
+    cat.includes('waste')
   ) {
     return {
       beforeUrl: LOCAL_EVIDENCE_PHOTOS.garbage_before,
@@ -48,19 +129,45 @@ export function getAlignedCivicPhoto(report: {
     };
   }
 
+  // 2. Headline / Summary Keyword Priority if category is custom/encroachment
   if (
-    cat.includes('road') ||
-    title.includes('manhole') ||
-    title.includes('crater') ||
-    title.includes('footpath') ||
-    title.includes('trench') ||
-    title.includes('culvert') ||
-    title.includes('pothole')
+    text.includes('drain') ||
+    text.includes('waterlog') ||
+    text.includes('sewer') ||
+    text.includes('flood')
+  ) {
+    return {
+      beforeUrl: LOCAL_EVIDENCE_PHOTOS.drain_before,
+      afterUrl: LOCAL_EVIDENCE_PHOTOS.drain_after,
+      sceneLabel: 'Storm Drain & Waterlogging Evidence',
+    };
+  }
+  if (
+    text.includes('garbage') ||
+    text.includes('waste') ||
+    text.includes('dump') ||
+    text.includes('rubble') ||
+    text.includes('debris') ||
+    text.includes('trash')
+  ) {
+    return {
+      beforeUrl: LOCAL_EVIDENCE_PHOTOS.garbage_before,
+      afterUrl: LOCAL_EVIDENCE_PHOTOS.garbage_after,
+      sceneLabel: 'Sanitation & Waste Clearance Evidence',
+    };
+  }
+  if (
+    text.includes('pothole') ||
+    text.includes('road') ||
+    text.includes('asphalt') ||
+    text.includes('crater') ||
+    text.includes('footpath') ||
+    text.includes('trench')
   ) {
     return {
       beforeUrl: LOCAL_EVIDENCE_PHOTOS.road_before,
       afterUrl: LOCAL_EVIDENCE_PHOTOS.road_after,
-      sceneLabel: 'Arterial Road & Sidewalk Evidence',
+      sceneLabel: 'Arterial Road & Asphalt Evidence',
     };
   }
 
@@ -133,7 +240,7 @@ export function isLiveUserUpload(report: {
   is_live_upload?: boolean;
 }): boolean {
   if (report.is_live_upload) return true;
-  if (report.image_url?.startsWith('data:image/')) return true;
+  if (isCustomUploadedDataUrl(report.image_url)) return true;
   if (report.id && !SEED_REPORT_IDS.has(report.id)) return true;
   return false;
 }

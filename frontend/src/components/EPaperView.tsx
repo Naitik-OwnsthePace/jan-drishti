@@ -65,14 +65,14 @@ const LOCAL_HINDI_FALLBACK: Record<string, string> = {
     'बीटा-2 आंतरिक मार्केट में स्ट्रीटलाइट बंद और खुला पोल स्विचबॉक्स',
   'Exposed toggle switchgear at child height on pole #B2-19 accompanied by complete darkness along residential park lane.':
     'पोल #B2-19 पर कम ऊंचाई पर खुला स्विचगियर और आवासीय पार्क लेन में पूर्ण अंधेरा।',
-  'Collapsed Culvert Slab & Road Crater Near Mother Dairy Booth':
-    'मदर डेयरी बूथ के पास टूटी पुलिया स्लैब और गहरा सड़क गड्ढा',
-  'Caved-in concrete drain cover creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.':
-    'सेक्टर रोड पर धंसी हुई कंक्रीट स्लैब से 2 फुट चौड़ा खतरनाक गड्ढा।',
-  'Uncovered Deep Sewer Manhole & Arterial Crater at Pari Chowk Slip Road':
-    'परी चौक स्लिप रोड पर बिना ढक्कन का गहरा सीवर मैनहोल और सड़क गड्ढा',
-  'Unbarricaded 1.8-foot deep road cavity and missing cast-iron manhole cover causing high-speed two-wheeler skids.':
-    'बिना बैरिकेडिंग के 1.8 फुट गहरा गड्ढा और खुला मैनहोल, जिससे दोपहिया वाहन दुर्घटनाग्रस्त हो रहे हैं।',
+  'Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth':
+    'मदर डेयरी बूथ के पास टूटी डामर सड़क और गहरा जानलेवा गड्ढा',
+  'Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.':
+    'सेक्टर रोड पर धंसी हुई डामर सड़क से 2 फुट चौड़ा खतरनाक गड्ढा।',
+  'Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road':
+    'परी चौक स्लिप रोड पर गहरा सड़क गड्ढा और टूटी डामर सतह',
+  'Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.':
+    'बिना बैरिकेडिंग के 1.8 फुट गहरा डामर सड़क का गड्ढा, जिससे दोपहिया वाहन दुर्घटनाग्रस्त हो रहे हैं।',
   'Traffic Signal Gantry High-Voltage Supply Wire Hanging Over Crosswalk':
     'जेब्रा क्रॉसिंग के ऊपर लटकता ट्रैफिक सिग्नल का हाई-वोल्टेज तार',
   'Severed power supply cable dangling at head height across pedestrian island at Pari Chowk metro interchange.':
@@ -107,8 +107,9 @@ const LOCALITY_HINDI: Record<string, string> = {
 const CATEGORY_HINDI: Record<string, string> = {
   'Electrical Hazard': 'विद्युत संकट',
   'Illegal Dumping': 'अवैध मलबा / कचरा डंपिंग',
-  'Road Damage': 'सड़क एवं मैनहोल क्षति',
-  Sanitation: 'स्वच्छता एवं जल निकासी',
+  'Road Damage': 'सड़क एवं डामर क्षति',
+  'Drainage / Flood': 'जल निकासी एवं बाढ़ संकट',
+  Sanitation: 'स्वच्छता एवं ठोस अपशिष्ट',
   Waterlogging: 'जलभराव संकट',
   Encroachment: 'अतिक्रमण',
 };

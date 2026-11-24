@@ -1,14 +1,34 @@
 import type { Report, PressKitData } from './types';
-import { getAlignedCivicPhoto } from './utils/civicPhotos';
+import {
+  compressImageFileToDataUrl,
+  getAlignedCivicPhoto,
+  isCustomUploadedDataUrl,
+} from './utils/civicPhotos';
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-const AI_TIMEOUT_MS = 10000;
+const AI_TIMEOUT_MS = 8000;
 const STANDARD_TIMEOUT_MS = 8000;
+const COLD_START_FAST_TIMEOUT_MS = 1650;
+
+// Track whether the Render / FastAPI backend has woken up yet so first-click cold starts respond in <2s
+let isBackendWarm = false;
+if (typeof window !== 'undefined') {
+  fetch(`${API_BASE}/`, { method: 'GET' })
+    .then((r) => {
+      if (r.ok) isBackendWarm = true;
+    })
+    .catch(() => {
+      // Backend still waking up; cold-start <2s fallback remains active
+    });
+}
+
+// Registry preserving compressed custom JPEG Data URLs across re-fetches and state updates
+const customImageRegistry: Record<string, { before?: string; after?: string }> = {};
 
 // Client-side in-memory + localStorage cache for instant (0ms) Press & RTI Dossiers per hotspot ID
 const pressKitMemoryCache: Record<string, PressKitData> = {};
 const hindiTranslationCache: Record<string, string> = {};
-const PRESS_KIT_STORAGE_KEY = 'jandrishti_presskit_cache_v4';
+const PRESS_KIT_STORAGE_KEY = 'jandrishti_presskit_cache_v5';
 
 // Offline-resilient 16-report Greater Noida dataset fallback (mirrors backend SEED_REPORTS_16)
 export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
@@ -266,9 +286,9 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'beta2-0003-4caf-8fec-af9ddc781e03',
-    title: 'Collapsed Culvert Slab & Road Crater Near Mother Dairy Booth',
+    title: 'Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth',
     summary:
-      'Caved-in concrete drain cover creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.',
+      'Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.',
     category: 'Road Damage',
     severity: 7.2,
     status: 'UNVERIFIED',
@@ -294,9 +314,9 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'e16f0eaf-4185-48e1-8d9b-f9a30d16af9c',
-    title: 'Uncovered Deep Sewer Manhole & Arterial Crater at Pari Chowk Slip Road',
+    title: 'Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road',
     summary:
-      'Unbarricaded 1.8-foot deep road cavity and missing cast-iron manhole cover causing high-speed two-wheeler skids.',
+      'Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.',
     category: 'Road Damage',
     severity: 9.2,
     status: 'SLA_BREACHED',
@@ -533,68 +553,79 @@ export function invalidatePressKitForCluster(clusterId?: string | null, reportId
   }
 }
 
-// Replace any external stock photo or SVG cartoon with our real local /evidence/*.jpg photos
-// while preserving real citizen-uploaded base64 JPEG/PNG photos
+// Strict 1-to-1 photo alignment for seeded reports while preserving 100% of custom user uploads
 export function sanitizeReportPhotos(rep: Report): Report {
   const aligned = getAlignedCivicPhoto(rep);
-  const isUserUploadedBefore =
-    rep.image_url?.startsWith('data:image/jpeg') ||
-    rep.image_url?.startsWith('data:image/png') ||
-    rep.image_url?.startsWith('blob:');
-  const isUserUploadedAfter =
-    rep.after_image_url?.startsWith('data:image/jpeg') ||
-    rep.after_image_url?.startsWith('data:image/png') ||
-    rep.after_image_url?.startsWith('blob:');
-  const isLocalEvidenceBefore = rep.image_url?.startsWith('/evidence/');
-  const isLocalEvidenceAfter = rep.after_image_url?.startsWith('/evidence/');
+  const reg = rep.id ? customImageRegistry[rep.id] : undefined;
+
+  const customBefore =
+    reg?.before || (isCustomUploadedDataUrl(rep.image_url) ? rep.image_url : null);
+  const customAfter =
+    reg?.after || (isCustomUploadedDataUrl(rep.after_image_url) ? rep.after_image_url : null);
+
+  if (rep.id && (customBefore || customAfter)) {
+    customImageRegistry[rep.id] = {
+      before: customBefore || reg?.before,
+      after: customAfter || reg?.after,
+    };
+  }
 
   return {
     ...rep,
-    is_live_upload: rep.is_live_upload || isUserUploadedBefore,
-    image_url: isUserUploadedBefore
-      ? rep.image_url
-      : isLocalEvidenceBefore
-      ? rep.image_url
-      : aligned.beforeUrl,
+    is_live_upload: Boolean(rep.is_live_upload || customBefore),
+    image_url: customBefore || aligned.beforeUrl,
     after_image_url:
-      rep.status === 'RESOLVED' || rep.after_image_url
-        ? isUserUploadedAfter
-          ? rep.after_image_url
-          : isLocalEvidenceAfter && rep.after_image_url
-          ? rep.after_image_url
-          : aligned.afterUrl
+      rep.status === 'RESOLVED' || rep.after_image_url || customAfter
+        ? customAfter || aligned.afterUrl
         : null,
   };
 }
 
+function triggerBackgroundWarmup() {
+  if (typeof window === 'undefined' || isBackendWarm) return;
+  fetch(`${API_BASE}/`, { method: 'GET' })
+    .then((r) => {
+      if (r.ok) isBackendWarm = true;
+    })
+    .catch(() => {
+      // ignore cold-start wake error
+    });
+}
+
 export async function fetchReports(): Promise<Report[]> {
+  const timeoutMs = isBackendWarm ? STANDARD_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/api/reports`, {}, STANDARD_TIMEOUT_MS);
+    const res = await fetchWithTimeout(`${API_BASE}/api/reports`, {}, timeoutMs);
     if (!res.ok) {
       throw new Error(`Failed to fetch reports: ${res.statusText}`);
     }
+    isBackendWarm = true;
     const data: Report[] = await res.json();
     return data.map(sanitizeReportPhotos);
   } catch {
-    // Graceful offline demo fallback so the UI never renders blank if backend is starting up
+    triggerBackgroundWarmup();
+    // Graceful offline / cold-start fallback so UI renders in <2s
     return CLIENT_FALLBACK_REPORTS_16.map((r) => sanitizeReportPhotos({ ...r }));
   }
 }
 
 export async function resetBackendDemoData(): Promise<Report[]> {
   clearPressKitCache();
+  Object.keys(customImageRegistry).forEach((k) => delete customImageRegistry[k]);
+  const timeoutMs = isBackendWarm ? STANDARD_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/api/demo/reset`,
       { method: 'POST' },
-      STANDARD_TIMEOUT_MS
+      timeoutMs
     );
     if (res.ok) {
+      isBackendWarm = true;
       const data: Report[] = await res.json();
       return data.map(sanitizeReportPhotos);
     }
   } catch {
-    // fallback below
+    triggerBackgroundWarmup();
   }
   return CLIENT_FALLBACK_REPORTS_16.map((r) => sanitizeReportPhotos({ ...r }));
 }
@@ -607,76 +638,97 @@ async function computeFileSha256Hex(file: File): Promise<string> {
     .join('');
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Failed to read image file'));
-    reader.readAsDataURL(file);
-  });
-}
+export function buildClientFallbackAudit(note: string, filename: string, locality: string) {
+  const cleanNote = (note || '').trim();
+  const cleanFile = (filename || '')
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .trim();
+  const combined = `${cleanNote} ${cleanFile}`.toLowerCase();
+  const locLower = (locality || '').toLowerCase();
 
-function buildClientFallbackAudit(note: string, locality: string) {
-  const lower = (note || '').toLowerCase();
-  if (/wire|spark|electric|pole|transformer|cable|11kv|feeder/.test(lower)) {
-    return {
-      is_valid_civic_issue: true,
-      category: 'Electrical Hazard',
-      severity: 8.8,
-      title: `Exposed Electrical Feeder & Cable Hazard Near ${locality}`,
-      summary: note
-        ? `Field observation at ${locality}: ${note}. Sealed with SHA-256 cryptographic digest and queued for GNIDA electrical safety crew.`
-        : `Active electrical hazard documented on-site at ${locality} requiring urgent GNIDA safety remediation.`,
-    };
+  let category = 'Electrical Hazard';
+  let severity = 8.5;
+  let title = `Unshielded Roadside Electrical Pillar & Cable Hazard at ${locality}`;
+  let defaultDesc = `Exposed roadside utility wiring and unlatched distribution enclosure documented at ${locality} require urgent GNIDA electrical wing inspection and weatherproof locking.`;
+
+  if (
+    /\b(wire|wires|cable|cables|electric|electrical|pole|spark|sparking|transformer|shock|meter|11kv|feeder|fuse|switch|streetlight)\b/.test(
+      combined
+    ) ||
+    /wire|cable|electric|pole|spark|transformer|feeder/.test(combined)
+  ) {
+    category = 'Electrical Hazard';
+    severity = 8.9;
+    title = `Exposed Live Electrical Cable & Feeder Hazard at ${locality}`;
+    defaultDesc = `Uninsulated overhead distribution cables and open roadside feeder switchgear documented at ${locality} pose an immediate electrocution and short-circuit fire risk to pedestrians.`;
+  } else if (/road|pothole|crater|asphalt|tar|pavement|footpath|trench|slab/.test(combined)) {
+    category = 'Road Damage';
+    severity = 8.3;
+    title = `Deep Arterial Pothole & Fractured Asphalt Hazard at ${locality}`;
+    defaultDesc = `Severely fractured asphalt carriageway and unbarricaded road crater at ${locality} create high-velocity two-wheeler skid and vehicular axle damage hazards.`;
+  } else if (/drain|flood|water|waterlog|sewer|gutter|monsoon|overflow|canal|clog/.test(combined)) {
+    category = 'Drainage / Flood';
+    severity = 8.1;
+    title = `Choked Storm Drain & Severe Street Waterlogging in ${locality}`;
+    defaultDesc = `Blocked storm drainage channel and stagnant carriageway flooding at ${locality} obstruct commuter movement and erode the underlying road sub-base.`;
+  } else if (/garbage|trash|waste|dump|debris|rubble|malba|litter|filth|plastic|bin/.test(combined)) {
+    category = 'Sanitation';
+    severity = 7.5;
+    title = `Unregulated Municipal Waste & Roadside Dumping at ${locality}`;
+    defaultDesc = `Accumulated uncollected solid waste and roadside dumping at ${locality} create acute public health, vector-breeding, and pedestrian obstruction hazards.`;
+  } else if (/encroach|stall|hawker|barrier/.test(combined)) {
+    category = 'Encroachment';
+    severity = 6.8;
+    title = `Pedestrian Footpath Right-of-Way Encroachment at ${locality}`;
+    defaultDesc = `Unauthorized obstruction across the designated pedestrian walkway at ${locality} forces commuters onto active vehicular traffic lanes.`;
+  } else if (locLower.includes('beta 2')) {
+    category = 'Drainage / Flood';
+    severity = 8.0;
+    title = `Blocked Sector Storm Drain & Surface Water Hazard in ${locality}`;
+    defaultDesc = `Silt-choked sector storm drain and roadside water accumulation documented in ${locality} require urgent GNIDA suction-pump clearance and grate restoration.`;
+  } else if (locLower.includes('pari chowk') || locLower.includes('alpha 1')) {
+    category = 'Road Damage';
+    severity = 8.1;
+    title = `Damaged Arterial Asphalt & Commuter Road Hazard at ${locality}`;
+    defaultDesc = `Degraded arterial road surface and fractured concrete kerb documented at ${locality} require immediate reflective barricading and hot-mix resurfacing.`;
   }
-  if (/dump|garbage|trash|waste|debris|rubble|malba/.test(lower)) {
-    return {
-      is_valid_civic_issue: true,
-      category: 'Illegal Dumping',
-      severity: 7.4,
-      title: `Unregulated Waste & Debris Dumping Reported at ${locality}`,
-      summary: note
-        ? `Field observation at ${locality}: ${note}. Sealed with SHA-256 cryptographic digest for sanitation clearance.`
-        : `Accumulated municipal waste documented at ${locality} awaiting GNIDA sanitation clearance.`,
-    };
-  }
-  if (/pothole|road|crater|asphalt|manhole|culvert|footpath/.test(lower)) {
-    return {
-      is_valid_civic_issue: true,
-      category: 'Road Damage',
-      severity: 8.2,
-      title: `Hazardous Arterial Road Crater & Manhole Risk at ${locality}`,
-      summary: note
-        ? `Field observation at ${locality}: ${note}. Sealed with SHA-256 cryptographic digest for civil repair.`
-        : `Road surface hazard documented at ${locality} awaiting urgent civil engineering repair.`,
-    };
-  }
-  if (/water|flood|waterlog|drain|sewer|overflow/.test(lower)) {
-    return {
-      is_valid_civic_issue: true,
-      category: 'Waterlogging',
-      severity: 7.9,
-      title: `Choked Storm Drain & Waterlogging Hazard in ${locality}`,
-      summary: note
-        ? `Field observation at ${locality}: ${note}. Sealed with SHA-256 cryptographic digest for drainage desilting.`
-        : `Severe storm drain waterlogging documented at ${locality} awaiting desilting crew.`,
-    };
-  }
+
+  const forensicClause =
+    'Sealed with SHA-256 cryptographic fingerprint and queued for GNIDA engineering remediation.';
+  const summary = cleanNote
+    ? `Field observation at ${locality}: ${cleanNote}. ${forensicClause}`
+    : `${defaultDesc} ${forensicClause}`;
+
   return {
     is_valid_civic_issue: true,
-    category: 'Sanitation',
-    severity: 7.2,
-    title: `Civic Infrastructure & Public Safety Grievance at ${locality}`,
-    summary: note
-      ? `Field observation at ${locality}: ${note}. Sealed with SHA-256 cryptographic digest for municipal verification.`
-      : `Civic infrastructure hazard documented on-site at ${locality} awaiting Reviewer audit.`,
+    category,
+    severity,
+    title,
+    summary,
   };
 }
 
 export async function submitReport(
-  formData: FormData
+  formData: FormData,
+  customDataUrl?: string
 ): Promise<{ report: Report; forensics: any }> {
+  const file = formData.get('file') as File | null;
+  const isSampleDemoFile = file?.name === 'KP3_LiveWire_FieldCapture.jpg' && !customDataUrl;
+
+  // Ensure any custom user-uploaded photo is compressed to JPEG Data URL (max-width 900px, quality 0.8)
+  let preservedCustomUrl: string | undefined = customDataUrl;
+  if (!preservedCustomUrl && file && !isSampleDemoFile) {
+    try {
+      preservedCustomUrl = await compressImageFileToDataUrl(file, 900, 0.8);
+    } catch {
+      preservedCustomUrl = undefined;
+    }
+  }
+
   let isValidationRejection = false;
+  const timeoutMs = isBackendWarm ? AI_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
+
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/api/reports/analyze-and-submit`,
@@ -684,8 +736,10 @@ export async function submitReport(
         method: 'POST',
         body: formData,
       },
-      AI_TIMEOUT_MS
+      timeoutMs
     );
+
+    isBackendWarm = true;
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -697,6 +751,13 @@ export async function submitReport(
 
     const result = await res.json();
     if (result.report) {
+      if (preservedCustomUrl && result.report.id) {
+        customImageRegistry[result.report.id] = {
+          ...customImageRegistry[result.report.id],
+          before: preservedCustomUrl,
+        };
+        result.report.image_url = preservedCustomUrl;
+      }
       result.report = sanitizeReportPhotos({ ...result.report, is_live_upload: true });
       invalidatePressKitForCluster(result.report.cluster_id, result.report.id);
     }
@@ -706,8 +767,9 @@ export async function submitReport(
       throw err;
     }
 
-    // Timeout / rate-limit / offline resilience fallback: compute real SHA-256 + heuristic audit locally
-    const file = formData.get('file') as File | null;
+    triggerBackgroundWarmup();
+
+    // Cold-start (<2s) / timeout / rate-limit fallback: real SHA-256 + compressed custom JPEG + smart keyword audit
     if (!file) {
       throw err;
     }
@@ -716,13 +778,22 @@ export async function submitReport(
     const lng = parseFloat(String(formData.get('lng') || '77.4821')) || 77.4821;
     const userNote = String(formData.get('user_note') || '');
 
-    const [evidenceHash, dataUrl] = await Promise.all([
+    const [evidenceHash, compressedUrl] = await Promise.all([
       computeFileSha256Hex(file),
-      readFileAsDataUrl(file),
+      preservedCustomUrl
+        ? Promise.resolve(preservedCustomUrl)
+        : isSampleDemoFile
+        ? Promise.resolve('/evidence/wire_before.jpg')
+        : compressImageFileToDataUrl(file, 900, 0.8),
     ]);
-    const audit = buildClientFallbackAudit(userNote, locality);
+
+    const audit = buildClientFallbackAudit(userNote, file.name, locality);
     const id = `live-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     const nowIso = new Date().toISOString();
+
+    if (isCustomUploadedDataUrl(compressedUrl)) {
+      customImageRegistry[id] = { before: compressedUrl };
+    }
 
     const fallbackReport: Report = sanitizeReportPhotos({
       id,
@@ -734,7 +805,7 @@ export async function submitReport(
       locality,
       lat,
       lng,
-      image_url: dataUrl,
+      image_url: compressedUrl,
       after_image_url: null,
       exif_verified: false,
       exif_metadata: {
@@ -763,7 +834,7 @@ export async function submitReport(
         exif_verified: false,
         exif_metadata: fallbackReport.exif_metadata,
         ai_audit: audit,
-        model_used: 'offline-resilient-fallback',
+        model_used: 'smart-keyword-fallback',
       },
     };
   }
@@ -774,14 +845,16 @@ export async function verifyReport(
   action: 'ESCALATE' | 'REJECT' | 'DISPUTE' | 'MERGE_HOTSPOT'
 ): Promise<any> {
   invalidatePressKitForCluster('63007a96-1cb2-4d78-b2ee-5aa6e9f33677', id);
+  const timeoutMs = isBackendWarm ? STANDARD_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   const res = await fetchWithTimeout(
     `${API_BASE}/api/reports/${id}/verify?action=${action}`,
     { method: 'PATCH' },
-    STANDARD_TIMEOUT_MS
+    timeoutMs
   );
   if (!res.ok) {
     throw new Error(`Verification action failed: ${res.statusText}`);
   }
+  isBackendWarm = true;
   return res.json();
 }
 
@@ -791,29 +864,49 @@ export async function resolveReport(
   afterImageUrl?: string,
   workOrderId?: string
 ): Promise<Report> {
+  let preservedAfterUrl = afterImageUrl;
+  if (file && !isCustomUploadedDataUrl(preservedAfterUrl)) {
+    try {
+      preservedAfterUrl = await compressImageFileToDataUrl(file, 900, 0.8);
+    } catch {
+      // keep existing afterImageUrl
+    }
+  }
+  if (preservedAfterUrl && isCustomUploadedDataUrl(preservedAfterUrl)) {
+    customImageRegistry[id] = {
+      ...customImageRegistry[id],
+      after: preservedAfterUrl,
+    };
+  }
+
   const formData = new FormData();
   if (file) {
     formData.append('file', file);
   }
-  if (afterImageUrl) {
-    formData.append('after_image_url', afterImageUrl);
+  if (preservedAfterUrl) {
+    formData.append('after_image_url', preservedAfterUrl);
   }
   if (workOrderId) {
     formData.append('work_order_id', workOrderId);
   }
 
+  const timeoutMs = isBackendWarm ? STANDARD_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   const res = await fetchWithTimeout(
     `${API_BASE}/api/reports/${id}/resolve`,
     {
       method: 'POST',
       body: formData,
     },
-    STANDARD_TIMEOUT_MS
+    timeoutMs
   );
   if (!res.ok) {
     throw new Error(`Resolution proof submission failed: ${res.statusText}`);
   }
+  isBackendWarm = true;
   const updated: Report = await res.json();
+  if (preservedAfterUrl && isCustomUploadedDataUrl(preservedAfterUrl)) {
+    updated.after_image_url = preservedAfterUrl;
+  }
   invalidatePressKitForCluster(updated.cluster_id, updated.id);
   return sanitizeReportPhotos(updated);
 }
@@ -830,7 +923,8 @@ const LOCALITY_HI_MAP: Record<string, string> = {
 const CATEGORY_HI_MAP: Record<string, string> = {
   'Electrical Hazard': 'विद्युत संकट एवं हाई-वोल्टेज खतरा',
   'Illegal Dumping': 'अवैध निर्माण मलबा एवं कचरा डंपिंग',
-  'Road Damage': 'सड़क गड्ढा एवं खुला मैनहोल संकट',
+  'Road Damage': 'सड़क गड्ढा एवं डामर क्षति संकट',
+  'Drainage / Flood': 'जल निकासी एवं गंभीर जलभराव संकट',
   Sanitation: 'स्वच्छता एवं जैव-अपशिष्ट संकट',
   Waterlogging: 'बरसाती नाला अवरुद्ध एवं जलभराव',
   Encroachment: 'सार्वजनिक फुटपाथ अतिक्रमण',
@@ -873,7 +967,8 @@ export function offlineTranslateToHindi(text: string): string {
     ['Greater Noida', 'ग्रेटर नोएडा'],
     ['Electrical Hazard', 'विद्युत संकट'],
     ['Illegal Dumping', 'अवैध कचरा डंपिंग'],
-    ['Road Damage', 'सड़क एवं मैनहोल क्षति'],
+    ['Road Damage', 'सड़क एवं डामर क्षति'],
+    ['Drainage / Flood', 'जल निकासी एवं बाढ़ संकट'],
     ['Sanitation', 'स्वच्छता संकट'],
     ['Waterlogging', 'जलभराव संकट'],
     ['Encroachment', 'अतिक्रमण'],
@@ -1051,16 +1146,18 @@ export async function fetchPressKit(
     return cached;
   }
 
-  // 2. Fetch with strict 10-second timeout + try/catch/finally + rich bilingual fallback
+  // 2. Fetch with strict 8s warm / <2s cold-start timeout + rich bilingual fallback
+  const timeoutMs = isBackendWarm ? AI_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/api/clusters/${clusterId}/press-kit`,
       {},
-      AI_TIMEOUT_MS
+      timeoutMs
     );
     if (!res.ok) {
       throw new Error(`Failed to generate press kit: ${res.statusText}`);
     }
+    isBackendWarm = true;
     const data: PressKitData = await res.json();
     const clientFallback = buildInstantClientPressKit(clusterId, fallbackReports);
     const sanitized: PressKitData = {
@@ -1075,6 +1172,7 @@ export async function fetchPressKit(
     saveStoredPressKit(clusterId, sanitized);
     return sanitized;
   } catch {
+    triggerBackgroundWarmup();
     const instant = buildInstantClientPressKit(clusterId, fallbackReports);
     saveStoredPressKit(clusterId, instant);
     return instant;
@@ -1086,6 +1184,7 @@ export async function translateToHindi(text: string): Promise<string> {
   if (!key) return '';
   if (hindiTranslationCache[key]) return hindiTranslationCache[key];
 
+  const timeoutMs = isBackendWarm ? AI_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/api/translate-hindi`,
@@ -1094,16 +1193,18 @@ export async function translateToHindi(text: string): Promise<string> {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: key }),
       },
-      AI_TIMEOUT_MS
+      timeoutMs
     );
     if (!res.ok) {
       throw new Error('Hindi translation failed');
     }
+    isBackendWarm = true;
     const data = await res.json();
     const out = data.translated || offlineTranslateToHindi(key);
     hindiTranslationCache[key] = out;
     return out;
   } catch {
+    triggerBackgroundWarmup();
     const fallback = offlineTranslateToHindi(key);
     hindiTranslationCache[key] = fallback;
     return fallback;
@@ -1112,6 +1213,7 @@ export async function translateToHindi(text: string): Promise<string> {
 
 export async function translateBatchToHindi(texts: string[]): Promise<string[]> {
   if (!texts || texts.length === 0) return [];
+  const timeoutMs = isBackendWarm ? AI_TIMEOUT_MS : COLD_START_FAST_TIMEOUT_MS;
   try {
     const res = await fetchWithTimeout(
       `${API_BASE}/api/translate-hindi`,
@@ -1120,17 +1222,19 @@ export async function translateBatchToHindi(texts: string[]): Promise<string[]> 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ texts }),
       },
-      AI_TIMEOUT_MS
+      timeoutMs
     );
     if (!res.ok) {
       throw new Error('Batch Hindi translation failed');
     }
+    isBackendWarm = true;
     const data = await res.json();
     if (Array.isArray(data.texts) && data.texts.length === texts.length) {
       return data.texts;
     }
     return texts.map(offlineTranslateToHindi);
   } catch {
+    triggerBackgroundWarmup();
     return texts.map(offlineTranslateToHindi);
   }
 }

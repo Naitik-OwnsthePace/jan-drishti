@@ -56,7 +56,7 @@ ACTIVE_GEMINI_MODELS = [
     "gemini-3.5-flash-lite",
 ]
 
-GEMINI_TOTAL_TIMEOUT_SEC = 9.0
+GEMINI_TOTAL_TIMEOUT_SEC = 8.0
 _AI_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=6)
 
 
@@ -80,7 +80,7 @@ def _call_gemini_with_timeout(
     total_timeout_sec: float = GEMINI_TOTAL_TIMEOUT_SEC,
 ) -> tuple[Optional[str], Optional[str]]:
     """
-    Calls active Gemini models with a strict wall-clock timeout (< 10s total)
+    Calls active Gemini models with a strict wall-clock timeout (<= 8s total)
     and try/except/finally protection so NO endpoint ever hangs.
     Returns (response_text, model_used) or (None, None) on timeout/error.
     """
@@ -90,10 +90,10 @@ def _call_gemini_with_timeout(
     deadline = time.monotonic() + total_timeout_sec
     for idx, model_name in enumerate(ACTIVE_GEMINI_MODELS):
         remaining = deadline - time.monotonic()
-        if remaining <= 0.6:
+        if remaining <= 0.5:
             break
-        # Give primary model up to ~5.5s so fallback model still gets ~3.5s within 9s budget
-        per_model_timeout = min(remaining, 5.5 if idx == 0 else remaining)
+        # Give primary gemini-3.8-flash up to 4.8s so gemini-3.5-flash-lite still gets ~3.2s within 8s budget
+        per_model_timeout = min(remaining, 4.8 if idx == 0 else remaining)
         future = None
         try:
             def _invoke(m=model_name, cfg=config):
@@ -132,42 +132,91 @@ class CivicAuditSchema(BaseModel):
     severity: float
 
 
-def _heuristic_audit(user_note: str, locality: str, exif_verified: bool = False) -> dict:
-    note_lower = (user_note or "").lower()
-    if any(w in note_lower for w in ("wire", "spark", "electric", "pole", "transformer", "shock", "cable", "meter", "11kv", "feeder")):
+def _heuristic_audit(
+    user_note: str,
+    locality: str,
+    filename: str = "",
+    exif_verified: bool = False,
+) -> dict:
+    clean_note = (user_note or "").strip()
+    clean_file = os.path.splitext(os.path.basename(filename or ""))[0].replace("_", " ").replace("-", " ").strip()
+    combined = f"{clean_note} {clean_file}".lower()
+    loc_lower = (locality or "").lower()
+
+    if any(w in combined for w in ("wire", "cable", "electric", "pole", "spark", "transformer", "shock", "meter", "11kv", "feeder", "fuse", "switch", "streetlight")):
         category = "Electrical Hazard"
-        severity = 8.8
-        title = f"Exposed Electrical Feeder & Cable Hazard Near {locality}"
-    elif any(w in note_lower for w in ("dump", "garbage", "trash", "waste", "debris", "rubble", "plastic", "malba")):
-        category = "Illegal Dumping"
-        severity = 7.4
-        title = f"Unregulated Waste & Construction Debris Dumping at {locality}"
-    elif any(w in note_lower for w in ("pothole", "road", "crater", "crack", "asphalt", "tar", "pavement", "manhole", "culvert")):
+        severity = 8.9
+        title = f"Exposed Live Electrical Cable & Feeder Hazard at {locality}"
+        default_desc = (
+            f"Uninsulated overhead distribution cables and open roadside feeder switchgear documented at {locality} "
+            f"pose an immediate electrocution and short-circuit fire risk to pedestrians."
+        )
+    elif any(w in combined for w in ("road", "pothole", "crater", "asphalt", "tar", "pavement", "footpath", "trench", "slab")):
         category = "Road Damage"
-        severity = 8.2
-        title = f"Hazardous Arterial Road Crater & Manhole Risk at {locality}"
-    elif any(w in note_lower for w in ("water", "flood", "waterlog", "drain", "sewer", "clog", "monsoon", "overflow")):
-        category = "Waterlogging"
-        severity = 7.9
-        title = f"Choked Storm Drain & Severe Waterlogging in {locality}"
-    elif any(w in note_lower for w in ("encroach", "stall", "footpath", "hawker", "illegal shop", "barrier")):
-        category = "Encroachment"
-        severity = 6.6
-        title = f"Pedestrian Right-of-Way Encroachment Reported in {locality}"
-    else:
+        severity = 8.3
+        title = f"Deep Arterial Pothole & Fractured Asphalt Hazard at {locality}"
+        default_desc = (
+            f"Severely fractured asphalt carriageway and unbarricaded road crater at {locality} "
+            f"create high-velocity two-wheeler skid and vehicular axle damage hazards."
+        )
+    elif any(w in combined for w in ("drain", "flood", "water", "waterlog", "sewer", "gutter", "monsoon", "overflow", "canal", "clog")):
+        category = "Drainage / Flood"
+        severity = 8.1
+        title = f"Choked Storm Drain & Severe Street Waterlogging in {locality}"
+        default_desc = (
+            f"Blocked storm drainage channel and stagnant carriageway flooding at {locality} "
+            f"obstruct commuter movement and erode the underlying road sub-base."
+        )
+    elif any(w in combined for w in ("garbage", "trash", "waste", "dump", "debris", "rubble", "malba", "litter", "filth", "plastic", "bin")):
         category = "Sanitation"
-        severity = 7.2
-        title = f"Public Sanitation & Civic Infrastructure Hazard at {locality}"
+        severity = 7.5
+        title = f"Unregulated Municipal Waste & Roadside Dumping at {locality}"
+        default_desc = (
+            f"Accumulated uncollected solid waste and roadside dumping at {locality} "
+            f"create acute public health, vector-breeding, and pedestrian obstruction hazards."
+        )
+    elif any(w in combined for w in ("encroach", "stall", "hawker", "illegal shop", "barrier")):
+        category = "Encroachment"
+        severity = 6.8
+        title = f"Pedestrian Footpath Right-of-Way Encroachment at {locality}"
+        default_desc = (
+            f"Unauthorized obstruction across the designated pedestrian walkway at {locality} "
+            f"forces commuters onto active vehicular traffic lanes."
+        )
+    elif "beta 2" in loc_lower:
+        category = "Drainage / Flood"
+        severity = 8.0
+        title = f"Blocked Sector Storm Drain & Surface Water Hazard in {locality}"
+        default_desc = (
+            f"Silt-choked sector storm drain and roadside water accumulation documented in {locality} "
+            f"require urgent GNIDA suction-pump clearance and grate restoration."
+        )
+    elif "pari chowk" in loc_lower or "alpha 1" in loc_lower:
+        category = "Road Damage"
+        severity = 8.1
+        title = f"Damaged Arterial Asphalt & Commuter Road Hazard at {locality}"
+        default_desc = (
+            f"Degraded arterial road surface and fractured concrete kerb documented at {locality} "
+            f"require immediate reflective barricading and hot-mix resurfacing."
+        )
+    else:
+        category = "Electrical Hazard"
+        severity = 8.5
+        title = f"Unshielded Roadside Electrical Pillar & Cable Hazard at {locality}"
+        default_desc = (
+            f"Exposed roadside utility wiring and unlatched distribution enclosure documented at {locality} "
+            f"require urgent GNIDA electrical wing inspection and weatherproof locking."
+        )
 
     forensic_clause = (
         "Corroborated via hardware camera EXIF GPS lock and SHA-256 cryptographic seal."
         if exif_verified
-        else "Sealed with SHA-256 cryptographic fingerprint and queued for municipal field inspection."
+        else "Sealed with SHA-256 cryptographic fingerprint and queued for GNIDA engineering remediation."
     )
     summary = (
-        f"Field observation at {locality}: {user_note.strip()}. {forensic_clause}"
-        if (user_note and user_note.strip())
-        else f"Active {category.lower()} documented on-site in {locality} requiring urgent GNIDA engineering remediation. {forensic_clause}"
+        f"Field observation at {locality}: {clean_note}. {forensic_clause}"
+        if clean_note
+        else f"{default_desc} {forensic_clause}"
     )
     return {
         "is_valid_civic_issue": True,
@@ -178,7 +227,7 @@ def _heuristic_audit(user_note: str, locality: str, exif_verified: bool = False)
     }
 
 
-def _compress_to_jpeg(image_bytes: bytes, max_width: int = 800, quality: int = 75) -> bytes:
+def _compress_to_jpeg(image_bytes: bytes, max_width: int = 900, quality: int = 80) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     if img.width > max_width:
         ratio = max_width / float(img.width)
@@ -509,8 +558,8 @@ SEED_REPORTS_16 = [
     },
     {
         "id": "beta2-0003-4caf-8fec-af9ddc781e03",
-        "title": "Collapsed Culvert Slab & Road Crater Near Mother Dairy Booth",
-        "summary": "Caved-in concrete drain cover creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.",
+        "title": "Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth",
+        "summary": "Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.",
         "category": "Road Damage",
         "severity": 7.2,
         "status": "UNVERIFIED",
@@ -534,11 +583,11 @@ SEED_REPORTS_16 = [
         "created_at": "2026-11-22T21:00:00+00:00",
         "resolved_at": None,
     },
-    # --- PARI CHOWK (3 Reports: Open Manhole, Traffic Signal Wire, Construction Debris) ---
+    # --- PARI CHOWK (3 Reports: Arterial Road Crater, Traffic Signal Wire, Construction Debris) ---
     {
         "id": "e16f0eaf-4185-48e1-8d9b-f9a30d16af9c",
-        "title": "Uncovered Deep Sewer Manhole & Arterial Crater at Pari Chowk Slip Road",
-        "summary": "Unbarricaded 1.8-foot deep road cavity and missing cast-iron manhole cover causing high-speed two-wheeler skids.",
+        "title": "Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road",
+        "summary": "Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.",
         "category": "Road Damage",
         "severity": 9.2,
         "status": "SLA_BREACHED",
@@ -744,7 +793,8 @@ def _build_bilingual_fallback_dossier(cluster_id: str, cluster_reports: list[dic
     cat_hi_map = {
         "Electrical Hazard": "विद्युत संकट एवं खुला हाई-वोल्टेज तार",
         "Illegal Dumping": "अवैध निर्माण मलबा एवं कचरा डंपिंग",
-        "Road Damage": "सड़क गड्ढा एवं खुला मैनहोल संकट",
+        "Road Damage": "सड़क गड्ढा एवं डामर क्षति संकट",
+        "Drainage / Flood": "जल निकासी एवं गंभीर जलभराव संकट",
         "Sanitation": "स्वच्छता एवं जैव-अपशिष्ट संकट",
         "Waterlogging": "बरसाती नाला अवरुद्ध एवं गंभीर जलभराव",
         "Encroachment": "सार्वजनिक फुटपाथ अतिक्रमण",
@@ -951,14 +1001,14 @@ async def analyze_and_submit_report(
             "You are an investigative civic-intelligence AI auditor for Jan Drishti in India. "
             "Inspect this citizen-submitted photo and optional note. "
             "1) Set is_valid_civic_issue=false ONLY if this is clearly a selfie, meme, blank screen, or indoor pet/portrait. "
-            "2) Categorize strictly into one of: 'Electrical Hazard', 'Illegal Dumping', 'Road Damage', 'Sanitation', 'Waterlogging', or 'Encroachment'. "
+            "2) Categorize strictly into one of: 'Electrical Hazard', 'Road Damage', 'Drainage / Flood', 'Sanitation', 'Illegal Dumping', 'Waterlogging', or 'Encroachment'. "
             "3) Rate public safety severity from 1 to 10. "
             "4) Write a sharp, factual journalistic headline and a 2-sentence objective summary. "
-            f"Citizen note: '{user_note}' | Locality: '{locality}'."
+            f"Citizen note: '{user_note}' | Uploaded file: '{file.filename or ''}' | Locality: '{locality}'."
         )
 
         audit: Optional[dict] = None
-        model_used = "heuristic-fallback"
+        model_used = "smart-keyword-fallback"
         try:
             config = types.GenerateContentConfig(
                 response_mime_type="application/json",
@@ -971,7 +1021,7 @@ async def analyze_and_submit_report(
                     prompt,
                 ],
                 config=config,
-                total_timeout_sec=GEMINI_TOTAL_TIMEOUT_SEC,
+                total_timeout_sec=8.0,
             )
             if ai_text:
                 audit = json.loads(ai_text)
@@ -985,8 +1035,13 @@ async def analyze_and_submit_report(
             audit = None
 
         if audit is None:
-            print(f"[{datetime.now().strftime('%H:%M:%S')}] [TruthEngine] Using instant heuristic hazard audit fallback.")
-            audit = _heuristic_audit(user_note or "", locality, exif_verified=exif_verified)
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] [TruthEngine] Using smart keyword/filename hazard audit fallback.")
+            audit = _heuristic_audit(
+                user_note or "",
+                locality,
+                filename=file.filename or "",
+                exif_verified=exif_verified,
+            )
 
         if not audit.get("is_valid_civic_issue", True):
             raise HTTPException(
@@ -1127,14 +1182,28 @@ async def resolve_with_proof(
     now_iso = datetime.now(timezone.utc).isoformat()
     after_url: Optional[str] = None
 
-    if file is not None:
+    provided_after = (after_image_url or "").strip()
+    if provided_after.startswith("data:image/"):
+        after_url = provided_after
+    elif file is not None:
         raw_bytes = await file.read()
         if raw_bytes:
             compact_bytes = _compress_to_jpeg(raw_bytes)
             after_url = f"data:image/jpeg;base64,{base64.b64encode(compact_bytes).decode('utf-8')}"
 
     if not after_url:
-        after_url = (after_image_url or "").strip() or "/evidence/wire_after.jpg"
+        if provided_after:
+            after_url = provided_after
+        else:
+            existing_cat = str(LIVE_DEMO_REPORTS.get(report_id, {}).get("category", "")).lower()
+            if "road" in existing_cat:
+                after_url = "/evidence/road_after.jpg"
+            elif "drain" in existing_cat or "water" in existing_cat or "flood" in existing_cat:
+                after_url = "/evidence/drain_after.jpg"
+            elif "sanitation" in existing_cat or "dump" in existing_cat:
+                after_url = "/evidence/garbage_after.jpg"
+            else:
+                after_url = "/evidence/wire_after.jpg"
 
     if report_id in LIVE_DEMO_REPORTS:
         LIVE_DEMO_REPORTS[report_id]["status"] = "RESOLVED"
@@ -1240,10 +1309,10 @@ def _offline_hindi_translate(text: str) -> str:
         "Choked primary storm drainage canal causing stagnant waterlogging across residential approach road for over 36 hours.": "अवरुद्ध मुख्य जल निकासी नहर के कारण 36 घंटे से अधिक समय से आवासीय सड़क पर गंभीर जलभराव।",
         "Beta-2 Internal Market Streetlight Outage & Open Pole Switchbox": "बीटा-2 आंतरिक मार्केट में स्ट्रीटलाइट बंद और खुला पोल स्विचबॉक्स",
         "Exposed toggle switchgear at child height on pole #B2-19 accompanied by complete darkness along residential park lane.": "पोल #B2-19 पर कम ऊंचाई पर खुला स्विचगियर और आवासीय पार्क लेन में पूर्ण अंधेरा।",
-        "Collapsed Culvert Slab & Road Crater Near Mother Dairy Booth": "मदर डेयरी बूथ के पास टूटी पुलिया स्लैब और गहरा सड़क गड्ढा",
-        "Caved-in concrete drain cover creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.": "सेक्टर रोड पर धंसी हुई कंक्रीट स्लैब से 2 फुट चौड़ा खतरनाक गड्ढा।",
-        "Uncovered Deep Sewer Manhole & Arterial Crater at Pari Chowk Slip Road": "परी चौक स्लिप रोड पर बिना ढक्कन का गहरा सीवर मैनहोल और सड़क गड्ढा",
-        "Unbarricaded 1.8-foot deep road cavity and missing cast-iron manhole cover causing high-speed two-wheeler skids.": "बिना बैरिकेडिंग के 1.8 फुट गहरा गड्ढा और खुला मैनहोल, जिससे दोपहिया वाहन दुर्घटनाग्रस्त हो रहे हैं।",
+        "Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth": "मदर डेयरी बूथ के पास टूटी डामर सड़क और गहरा जानलेवा गड्ढा",
+        "Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.": "सेक्टर रोड पर धंसी हुई डामर सड़क से 2 फुट चौड़ा खतरनाक गड्ढा।",
+        "Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road": "परी चौक स्लिप रोड पर गहरा सड़क गड्ढा और टूटी डामर सतह",
+        "Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.": "बिना बैरिकेडिंग के 1.8 फुट गहरा डामर सड़क का गड्ढा, जिससे दोपहिया वाहन दुर्घटनाग्रस्त हो रहे हैं।",
         "Traffic Signal Gantry High-Voltage Supply Wire Hanging Over Crosswalk": "जेब्रा क्रॉसिंग के ऊपर लटकता ट्रैफिक सिग्नल का हाई-वोल्टेज तार",
         "Severed power supply cable dangling at head height across pedestrian island at Pari Chowk metro interchange.": "परी चौक मेट्रो इंटरचेंज पर पैदल यात्रियों के रास्ते में सिर की ऊंचाई पर लटकता बिजली केबल।",
         "Illegal Construction Rubble & Concrete Debris Blocking Expressway Entry": "एक्सप्रेसवे सर्विस लेन को अवरुद्ध करता अवैध निर्माण मलबा",
@@ -1284,6 +1353,7 @@ def _offline_hindi_translate(text: str) -> str:
         ("Illegal Dumping", "अवैध कचरा डंपिंग"),
         ("Road Damage", "सड़क क्षति / गड्ढा"),
         ("Sanitation", "स्वच्छता संकट"),
+        ("Drainage / Flood", "जल निकासी एवं बाढ़ संकट"),
         ("Waterlogging", "जलभराव"),
         ("Encroachment", "अतिक्रमण"),
     ]

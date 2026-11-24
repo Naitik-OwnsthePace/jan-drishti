@@ -1,7 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { Report } from '../types';
 import { resolveReport } from '../api';
-import { getAlignedCivicPhoto } from '../utils/civicPhotos';
+import {
+  getAlignedCivicPhoto,
+  compressImageFileToDataUrl,
+} from '../utils/civicPhotos';
 import {
   X,
   Camera,
@@ -28,6 +31,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [customAfterDataUrl, setCustomAfterDataUrl] = useState<string | null>(null);
   const [workOrderId, setWorkOrderId] = useState<string>('GNIDA/Z3/2026/WO-419');
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
   useEffect(() => {
     setFile(null);
     setPreviewUrl(null);
+    setCustomAfterDataUrl(null);
     setWorkOrderId(report?.work_order_id || 'GNIDA/Z3/2026/WO-419');
     setSubmitting(false);
     setError(null);
@@ -58,17 +63,26 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
 
   const alignedAfterUrl = getAlignedCivicPhoto(report).afterUrl;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       setFile(selected);
-      setPreviewUrl(URL.createObjectURL(selected));
       setError(null);
+      try {
+        const compressed = await compressImageFileToDataUrl(selected, 900, 0.8);
+        setCustomAfterDataUrl(compressed);
+        setPreviewUrl(compressed);
+      } catch {
+        const objUrl = URL.createObjectURL(selected);
+        setCustomAfterDataUrl(objUrl);
+        setPreviewUrl(objUrl);
+      }
     }
   };
 
   const handleUseDemoAfterPhoto = () => {
     setFile(null);
+    setCustomAfterDataUrl(null);
     setPreviewUrl(alignedAfterUrl);
     setError(null);
   };
@@ -80,7 +94,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
     setSubmitting(true);
     setError(null);
     const cleanWo = workOrderId.trim() || 'GNIDA/Z3/2026/WO-419';
-    const targetAfterUrl = previewUrl || alignedAfterUrl;
+    const targetAfterUrl = customAfterDataUrl || previewUrl || alignedAfterUrl;
 
     let timeoutHandle: number | null = null;
     try {
@@ -98,8 +112,8 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
           timeoutPromise,
         ]);
       } catch (apiErr: any) {
-        // If using verified demo photo while backend is offline, apply clean local resolution fallback
-        if (!file && targetAfterUrl) {
+        // Preserve custom compressed Data URL or verified demo photo even if backend is cold-starting
+        if (targetAfterUrl) {
           updated = {
             ...report,
             status: 'RESOLVED',
@@ -116,7 +130,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
         ...report,
         ...updated,
         status: 'RESOLVED',
-        after_image_url: updated.after_image_url || targetAfterUrl,
+        after_image_url: customAfterDataUrl || updated.after_image_url || targetAfterUrl,
         resolved_at: updated.resolved_at || new Date().toISOString(),
         work_order_id: cleanWo,
       };
@@ -239,6 +253,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
                 onClick={() => {
                   setFile(null);
                   setPreviewUrl(null);
+                  setCustomAfterDataUrl(null);
                 }}
                 className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-900/80 text-white hover:bg-red-600 transition-colors shadow"
               >

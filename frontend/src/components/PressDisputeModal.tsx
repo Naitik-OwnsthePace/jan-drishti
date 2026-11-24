@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 import type { Report } from '../types';
-import { getAlignedCivicPhoto } from '../utils/civicPhotos';
+import {
+  getAlignedCivicPhoto,
+  compressImageFileToDataUrl,
+} from '../utils/civicPhotos';
 import {
   X,
   AlertOctagon,
@@ -49,12 +52,16 @@ export const PressDisputeModal: React.FC<PressDisputeModalProps> = ({
   const canDispute = isEligibleTrust && isUnderQuota;
   const aligned = getAlignedCivicPhoto(report);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const f = e.target.files[0];
-      const url = URL.createObjectURL(f);
-      setCounterPhotoUrl(url);
       setCounterPhotoName(f.name);
+      try {
+        const compressed = await compressImageFileToDataUrl(f, 900, 0.8);
+        setCounterPhotoUrl(compressed);
+      } catch {
+        setCounterPhotoUrl(URL.createObjectURL(f));
+      }
     }
   };
 

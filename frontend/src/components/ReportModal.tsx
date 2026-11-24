@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { PresetLocation, Report } from '../types';
 import { submitReport } from '../api';
+import { compressImageFileToDataUrl } from '../utils/civicPhotos';
 import {
   X,
   Camera,
@@ -34,6 +35,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [customDataUrl, setCustomDataUrl] = useState<string | null>(null);
   const [locality, setLocality] = useState<string>('Knowledge Park III');
   const [lat, setLat] = useState<number>(28.4749);
   const [lng, setLng] = useState<number>(77.4821);
@@ -59,12 +61,20 @@ export const ReportModal: React.FC<ReportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selected = e.target.files[0];
       setFile(selected);
-      setPreviewUrl(URL.createObjectURL(selected));
       setErrorMessage(null);
+      try {
+        const compressed = await compressImageFileToDataUrl(selected, 900, 0.8);
+        setCustomDataUrl(compressed);
+        setPreviewUrl(compressed);
+      } catch {
+        const objUrl = URL.createObjectURL(selected);
+        setCustomDataUrl(objUrl);
+        setPreviewUrl(objUrl);
+      }
     }
   };
 
@@ -78,6 +88,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
         type: 'image/jpeg',
       });
       setFile(sampleFile);
+      setCustomDataUrl(null);
       setPreviewUrl('/evidence/wire_before.jpg');
       if (!userNote.trim()) {
         setUserNote(
@@ -136,7 +147,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     const timer2 = window.setTimeout(() => setScanStep(3), 900);
 
     try {
-      const data = await submitReport(formData);
+      const data = await submitReport(formData, customDataUrl || undefined);
+      if (customDataUrl && data?.report) {
+        data.report = {
+          ...data.report,
+          image_url: customDataUrl,
+          is_live_upload: true,
+        };
+      }
       setScanStep(4);
       setSubmissionResult(data);
       onReportSubmitted(
@@ -228,6 +246,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     if (isSubmitting) return;
     setFile(null);
     setPreviewUrl(null);
+    setCustomDataUrl(null);
     setUserNote('');
     setSubmissionResult(null);
     setErrorMessage(null);
@@ -425,6 +444,7 @@ export const ReportModal: React.FC<ReportModalProps> = ({
                       onClick={() => {
                         setFile(null);
                         setPreviewUrl(null);
+                        setCustomDataUrl(null);
                       }}
                       className="absolute top-2 right-2 p-1.5 rounded-full bg-slate-900/80 text-white hover:bg-red-600 transition-colors shadow"
                     >
