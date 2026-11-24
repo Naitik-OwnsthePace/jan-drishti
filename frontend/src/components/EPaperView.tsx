@@ -55,12 +55,12 @@ const LOCAL_HINDI_FALLBACK: Record<string, string> = {
     'डिलीवरी ट्रक में उलझे नीचे लटकते केबल; प्रस्तुत फोटो में पिन से 412 मीटर का जीपीएस अंतर दर्ज।',
   'Insulated & Locked Feeder Pillar #4 Opposite Engineering Campus':
     'इंजीनियरिंग कैंपस के सामने फीडर पिलर #4 को सुरक्षित और लॉक किया गया',
-  'GNIDA electrical wing installed weatherproof lockable enclosure and underground conduit shielding within 22 hours of escalation.':
-    'शिकायत के 22 घंटे के भीतर विद्युत विभाग द्वारा वेदरप्रूफ लॉक और भूमिगत सुरक्षा कवच स्थापित किया गया।',
+  'GNIDA electrical wing installed weatherproof lockable enclosure and underground conduit shielding within 11 hours of escalation.':
+    'शिकायत के 11 घंटे के भीतर विद्युत विभाग द्वारा वेदरप्रूफ लॉक और भूमिगत सुरक्षा कवच स्थापित किया गया।',
   'Severe Storm Drain Overflow & Knee-Deep Waterlogging in Block-C':
     'ब्लॉक-सी में मुख्य बरसाती नाला ओवरफ्लो और घुटनों तक जलभराव',
-  'Choked primary storm drainage canal causing stagnant waterlogging across residential approach road for over 48 hours.':
-    'अवरुद्ध मुख्य जल निकासी नहर के कारण 48 घंटे से अधिक समय से आवासीय सड़क पर गंभीर जलभराव।',
+  'Choked primary storm drainage canal causing stagnant waterlogging across residential approach road for over 36 hours.':
+    'अवरुद्ध मुख्य जल निकासी नहर के कारण 36 घंटे से अधिक समय से आवासीय सड़क पर गंभीर जलभराव।',
   'Beta-2 Internal Market Streetlight Outage & Open Pole Switchbox':
     'बीटा-2 आंतरिक मार्केट में स्ट्रीटलाइट बंद और खुला पोल स्विचबॉक्स',
   'Exposed toggle switchgear at child height on pole #B2-19 accompanied by complete darkness along residential park lane.':
@@ -82,13 +82,13 @@ const LOCAL_HINDI_FALLBACK: Record<string, string> = {
   'Three truckloads of demolished concrete and rebar dumped overnight across the Noida-Greater Noida Expressway service lane.':
     'नोएडा-ग्रेटर नोएडा एक्सप्रेसवे सर्विस लेन पर रातों-रात डाले गए तीन ट्रक कंक्रीट और सरिया का मलबा।',
   'Overflowing Municipal Garbage & Bio-Waste Near Alpha-1 Metro Feeder':
-    'अल्फा-1 मेट्रो फीडर के पास कचरा डंप का 18 घंटे में पूर्ण समाधान',
-  'Cleared, disinfected, and paved within 18 hours of escalation; verified via geo-tagged After-photo remediation proof.':
-    'शिकायत के 18 घंटे के भीतर सफाई और कीटाणुशोधन पूर्ण; जियो-टैग आफ्टर-फोटो द्वारा सत्यापित।',
+    'अल्फा-1 मेट्रो फीडर के पास कचरा डंप का 19 घंटे में पूर्ण समाधान',
+  'Cleared, disinfected, and paved within 19 hours of escalation; verified via geo-tagged After-photo remediation proof.':
+    'शिकायत के 19 घंटे के भीतर सफाई और कीटाणुशोधन पूर्ण; जियो-टैग आफ्टर-फोटो द्वारा सत्यापित।',
   'Collapsed Pedestrian Footpath & Utility Trench Outside Bank Enclave':
     'बैंक एन्क्लेव के बाहर टूटे फुटपाथ और ट्रेंच की मरम्मत पूर्ण',
-  'GNIDA civil crew relaid interlocking paver blocks and sealed underground duct trench ahead of 48-hour SLA deadline.':
-    '48 घंटे की समय-सीमा से पहले सिविल टीम द्वारा इंटरलॉकिंग पेवर ब्लॉक लगाकर फुटपाथ दुरुस्त किया गया।',
+  'GNIDA civil crew relaid interlocking paver blocks and sealed underground duct trench within 28 hours of citizen report.':
+    'नागरिक रिपोर्ट के 28 घंटे के भीतर सिविल टीम द्वारा इंटरलॉकिंग पेवर ब्लॉक लगाकर फुटपाथ दुरुस्त किया गया।',
   'Commercial Plaza Feeder Pillar Fuse Sparking During Peak Load':
     'पीक लोड के दौरान कमर्शियल प्लाजा फीडर पिलर में स्पार्किंग',
   'Overloaded 3-phase distribution board emitting sparks near Alpha-1 central market parking entry; assigned to field crew.':
@@ -157,20 +157,32 @@ export const EPaperView: React.FC<EPaperViewProps> = ({
 
     if (missingStrings.length === 0) return;
 
+    let active = true;
     setTranslating(true);
-    translateBatchToHindi(missingStrings)
-      .then((translatedList) => {
-        const nextMap = { ...hindiMap };
-        missingStrings.forEach((orig, idx) => {
-          nextMap[orig] = translatedList[idx] || orig;
+    (async () => {
+      try {
+        const translatedList = await translateBatchToHindi(missingStrings);
+        if (!active) return;
+        setHindiMap((prev) => {
+          const nextMap = { ...prev };
+          missingStrings.forEach((orig, idx) => {
+            nextMap[orig] = translatedList[idx] || orig;
+          });
+          return nextMap;
         });
-        setHindiMap(nextMap);
-      })
-      .catch(() => {})
-      .finally(() => {
-        setTranslating(false);
-      });
-  }, [lang, reports, hindiMap]);
+      } catch {
+        // Fallback already handled inside translateBatchToHindi
+      } finally {
+        if (active) {
+          setTranslating(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [lang, reports]);
 
   const t = (text: string) => {
     if (lang === 'en') return text;

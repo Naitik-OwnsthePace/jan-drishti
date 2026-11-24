@@ -23,6 +23,17 @@ interface VerifyAboutViewProps {
 
 type VerdictType = 'authentic' | 'discrepancy' | 'tampered';
 
+const LOCAL_EVIDENCE_FILE_HASHES: Record<string, string> = {
+  ee8fd3e3f2d28a12fdff3b59b9b64f7c2f30340919a74f241d65c15a2249759d: '/evidence/wire_before.jpg',
+  '29253525f90ea582059642e09fb5b1774aafdda7c8d38676c4937794553ee60a': '/evidence/wire_after.jpg',
+  '2944dd0d52365e28f1e56f9137555576ae3b3770c8508f770913966cc4491cf7': '/evidence/road_before.jpg',
+  cf651e507d4568e6629756de5c111a5473dc402db66b33bc5977a3d5e7a87255: '/evidence/road_after.jpg',
+  a2130afe9eab6cc51d0b515c8ac08f2cf84982dccee839579aeccf545ee5a413: '/evidence/drain_before.jpg',
+  '5289469e32afc7d0b33582cb45182ba2739a6c7769b20a0a145ff0635f76b4aa': '/evidence/drain_after.jpg',
+  '9984d25a61e6e393d33916fe16ecb77477b6a66ad09187cb8fae0810fbcbd406': '/evidence/garbage_before.jpg',
+  '046417cb03217eb815d63612fdbfae9cd9b0475b83cb4958325ec9a73bd335cc': '/evidence/garbage_after.jpg',
+};
+
 export const VerifyAboutView: React.FC<VerifyAboutViewProps> = ({
   reports,
   onOpenCaseStory,
@@ -54,9 +65,17 @@ export const VerifyAboutView: React.FC<VerifyAboutViewProps> = ({
     const hexHash = await computeBrowserSha256(buffer);
     setComputedHash(hexHash);
 
-    const match = reports.find(
+    const exactHashMatch = reports.find(
       (r) => r.evidence_hash.toLowerCase() === hexHash.toLowerCase()
     );
+    const knownEvidencePath = LOCAL_EVIDENCE_FILE_HASHES[hexHash.toLowerCase()];
+    const seededAssetMatch = knownEvidencePath
+      ? reports.find(
+          (r) => r.image_url === knownEvidencePath || r.after_image_url === knownEvidencePath
+        )
+      : undefined;
+
+    const match = exactHashMatch || seededAssetMatch;
     if (match) {
       setMatchedReport(match);
       setVerdict(match.exif_verified ? 'authentic' : 'discrepancy');

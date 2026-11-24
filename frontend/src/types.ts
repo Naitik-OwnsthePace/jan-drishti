@@ -30,6 +30,7 @@ export interface Report {
   sla_deadline?: string | null;
   created_at: string;
   resolved_at?: string | null;
+  work_order_id?: string;
   is_live_upload?: boolean;
 }
 
@@ -76,6 +77,11 @@ export interface PressKitData {
   report_count: number;
   reports: Report[];
   investigative_brief: string;
+  investigative_brief_hi?: string;
+  rti_notice?: string;
+  rti_notice_hi?: string;
+  social_thread_hi?: string;
+  model_used?: string;
 }
 
 export interface PresetLocation {

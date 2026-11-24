@@ -1,31 +1,80 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import type { Report } from '../types';
+import type { Report, DisputeRecord } from '../types';
+import { getAlignedCivicPhoto, getResolutionDurationLabel } from '../utils/civicPhotos';
 import { RotateCcw, Moon, Sun, Radio } from 'lucide-react';
 
 interface MapViewProps {
   reports: Report[];
+  disputeRecords?: Record<string, DisputeRecord>;
   selectedReportId: string | null;
   hoveredReportId?: string | null;
   onSelectReport: (id: string) => void;
   onOpenCaseStory: (report: Report) => void;
+  onOpenBeforeAfterModal?: (report: Report) => void;
   flyToLocation: { lat: number; lng: number } | null;
 }
 
-const DEFAULT_CENTER: [number, number] = [28.4744, 77.5040];
+const DEFAULT_CENTER: [number, number] = [28.4744, 77.504];
 const DEFAULT_ZOOM = 13;
 
+// Keyless OpenStreetMap tiles (zero CartoDB API-key watermarks; CSS filter provides Dark Tactical mode)
 const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function escapeHtml(raw: string): string {
+  return (raw || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function computeSlaPopupBadge(report: Report, dispute?: DisputeRecord): string {
+  if (dispute?.status === 'UNDER_REVIEW') {
+    return '⚖ Under Dispute Review';
+  }
+  if (dispute?.status === 'UPHELD') {
+    return '⏱ Dispute Upheld • Re-Opened';
+  }
+  if (report.status === 'RESOLVED') {
+    return `✔ Fixed in ${getResolutionDurationLabel(report)}`;
+  }
+  if (!report.sla_deadline) {
+    if (report.status === 'SLA_BREACHED') return '⏱ Ignored 19h past SLA';
+    if (report.status === 'ESCALATED') return '⏱ 28h left in SLA';
+    return '🔎 Awaiting EXIF Audit';
+  }
+  const diff = new Date(report.sla_deadline).getTime() - Date.now();
+  if (diff <= 0 || report.status === 'SLA_BREACHED') {
+    const hrs = Math.max(4, Math.min(48, Math.floor(Math.abs(diff) / (1000 * 60 * 60))));
+    return `⏱ Ignored ${hrs}h past SLA`;
+  }
+  const left = Math.max(4, Math.floor(diff / (1000 * 60 * 60)));
+  return `⏱ ${left}h left to fix`;
+}
+
 export const MapView: React.FC<MapViewProps> = ({
   reports,
+  disputeRecords = {},
   selectedReportId,
   hoveredReportId = null,
   onSelectReport,
   onOpenCaseStory,
+  onOpenBeforeAfterModal,
   flyToLocation,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +110,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
     setTimeout(() => {
       map.invalidateSize();
-    }, 100);
+    }, 120);
 
     return () => {
       map.remove();
@@ -86,14 +135,14 @@ export const MapView: React.FC<MapViewProps> = ({
     if (selectedReportId && markerByIdRef.current[selectedReportId]) {
       const target = markerByIdRef.current[selectedReportId];
       mapRef.current.flyTo([target.lat, target.lng], 16, {
-        duration: 1.0,
+        duration: 0.95,
       });
       setTimeout(() => {
         target.marker.openPopup();
-      }, 350);
+      }, 320);
     } else if (flyToLocation) {
       mapRef.current.flyTo([flyToLocation.lat, flyToLocation.lng], 16, {
-        duration: 1.0,
+        duration: 0.95,
       });
     }
   }, [selectedReportId, flyToLocation]);
@@ -102,7 +151,7 @@ export const MapView: React.FC<MapViewProps> = ({
     if (mapRef.current) {
       mapRef.current.closePopup();
       mapRef.current.flyTo(DEFAULT_CENTER, DEFAULT_ZOOM, {
-        duration: 1.1,
+        duration: 1.0,
       });
     }
   };
@@ -117,15 +166,31 @@ export const MapView: React.FC<MapViewProps> = ({
     circlesRef.current.forEach((c) => c.remove());
     circlesRef.current = [];
 
-    const clusterMap: Record<string, Report[]> = {};
+    // Group reports by explicit cluster_id OR 200m Haversine proximity
+    const clusterGroups: Report[][] = [];
+    const assigned = new Set<string>();
+
     reports.forEach((r) => {
-      const key = r.cluster_id || `${r.lat.toFixed(3)}_${r.lng.toFixed(3)}`;
-      if (!clusterMap[key]) clusterMap[key] = [];
-      clusterMap[key].push(r);
+      if (assigned.has(r.id)) return;
+      const group: Report[] = [r];
+      assigned.add(r.id);
+
+      reports.forEach((other) => {
+        if (assigned.has(other.id)) return;
+        const sameClusterId =
+          r.cluster_id && other.cluster_id && r.cluster_id === other.cluster_id;
+        const within200m = haversineMeters(r.lat, r.lng, other.lat, other.lng) <= 200;
+        if (sameClusterId || within200m) {
+          group.push(other);
+          assigned.add(other.id);
+        }
+      });
+
+      clusterGroups.push(group);
     });
 
     // Draw translucent 200m radius pulsing red dashed hotspot rings around multi-report clusters
-    Object.entries(clusterMap).forEach(([_clusterId, clusterReports]) => {
+    clusterGroups.forEach((clusterReports) => {
       if (clusterReports.length >= 2) {
         const avgLat =
           clusterReports.reduce((sum, r) => sum + r.lat, 0) / clusterReports.length;
@@ -152,9 +217,9 @@ export const MapView: React.FC<MapViewProps> = ({
       }
     });
 
-    // Apply deterministic ~25m spiral micro-offset so co-located pins inside the 200m cluster never overlap
+    // Apply deterministic micro-offset so co-located pins inside the 200m cluster never stack on one pixel
     const displayCoords: Record<string, { lat: number; lng: number }> = {};
-    Object.values(clusterMap).forEach((group) => {
+    clusterGroups.forEach((group) => {
       if (group.length === 1) {
         displayCoords[group[0].id] = { lat: group[0].lat, lng: group[0].lng };
       } else {
@@ -174,17 +239,24 @@ export const MapView: React.FC<MapViewProps> = ({
     reports.forEach((report, idx) => {
       const isSelected = report.id === selectedReportId || report.id === hoveredReportId;
       const coords = displayCoords[report.id] || { lat: report.lat, lng: report.lng };
+      const disp = disputeRecords[report.id];
+      const aligned = getAlignedCivicPhoto(report);
 
       let pinColor = '#94A3B8';
       let glowShadow = '0 0 12px rgba(148, 163, 184, 0.7)';
       let ringClass = '';
       let statusLabel = 'Needs Check';
 
-      if (report.status === 'SLA_BREACHED') {
+      if (disp?.status === 'UNDER_REVIEW') {
+        pinColor = '#9333EA';
+        glowShadow = '0 0 18px rgba(147, 51, 234, 0.95)';
+        ringClass = 'beacon-ring-crimson';
+        statusLabel = 'Under Dispute Review';
+      } else if (disp?.status === 'UPHELD' || report.status === 'SLA_BREACHED') {
         pinColor = '#EF4444';
         glowShadow = '0 0 18px rgba(239, 68, 68, 0.95)';
         ringClass = 'beacon-ring-crimson';
-        statusLabel = 'Overdue (Ignored)';
+        statusLabel = disp?.status === 'UPHELD' ? 'Dispute Upheld' : 'Overdue (Ignored)';
       } else if (report.status === 'ESCALATED') {
         pinColor = '#F59E0B';
         glowShadow = '0 0 16px rgba(245, 158, 11, 0.85)';
@@ -197,6 +269,9 @@ export const MapView: React.FC<MapViewProps> = ({
       }
 
       const size = isSelected ? 26 : 22;
+      const slaBadgeText = computeSlaPopupBadge(report, disp);
+      const canCompareBeforeAfter =
+        report.status === 'RESOLVED' && disp?.status !== 'UPHELD' && !!onOpenBeforeAfterModal;
 
       const customIcon = L.divIcon({
         className: 'custom-tactical-beacon',
@@ -230,32 +305,56 @@ export const MapView: React.FC<MapViewProps> = ({
         zIndexOffset: isSelected ? 1000 : idx * 10,
       }).addTo(map);
 
+      const safeImgSrc = escapeHtml(report.image_url || aligned.beforeUrl);
+      const safeFallbackSrc = escapeHtml(aligned.beforeUrl);
+
       const popupHtml = `
-        <div style="font-family: 'Plus Jakarta Sans', sans-serif; width: 255px; padding: 4px;">
-          <div style="position: relative; height: 112px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #1E293B;">
-            <img src="${report.image_url}" alt="" style="width: 100%; height: 100%; object-fit: cover;" />
+        <div style="font-family: 'Plus Jakarta Sans', sans-serif; width: 260px; padding: 4px;">
+          <div style="position: relative; height: 114px; border-radius: 8px; overflow: hidden; margin-bottom: 8px; background: #1E293B;">
+            <img src="${safeImgSrc}" onerror="this.onerror=null;this.src='${safeFallbackSrc}';" alt="" style="width: 100%; height: 100%; object-fit: cover;" />
             <span style="position: absolute; top: 6px; left: 6px; background: rgba(11,17,32,0.92); color: ${pinColor}; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px; text-transform: uppercase;">
-              ● ${statusLabel}
+              ● ${escapeHtml(statusLabel)}
             </span>
             <span style="position: absolute; top: 6px; right: 6px; background: #DC2626; color: #FFFFFF; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px;">
               Risk ${report.severity}/10
             </span>
             <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(11,17,32,0.88); color: #FCD34D; font-family: monospace; font-size: 9.5px; padding: 2px 6px;">
-              📷 ${report.exif_metadata?.device || 'Citizen Camera'} • ${report.lat.toFixed(4)}°N
+              📷 ${escapeHtml(report.exif_metadata?.device || 'Citizen Camera')} • ${report.lat.toFixed(4)}°N
             </div>
           </div>
           <div style="font-size: 13px; font-weight: 800; color: #FFFFFF; line-height: 1.3; margin-bottom: 4px;">
-            ${report.title}
+            ${escapeHtml(report.title)}
           </div>
-          <div style="font-size: 11px; color: #94A3B8; margin-bottom: 6px;">
-            📍 ${report.locality} • ${report.category}
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; color: #CBD5E1; margin-bottom: 6px;">
+            <span>📍 ${escapeHtml(report.locality)}</span>
+            <span style="color: ${
+              report.status === 'RESOLVED' ? '#34D399' : '#F87171'
+            }; font-weight: 800;">${escapeHtml(slaBadgeText)}</span>
           </div>
           <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.08); padding: 4px 7px; border-radius: 6px; margin-bottom: 8px; font-family: monospace; font-size: 10px; color: #CBD5E1;">
-            <span>SHA-256: ${report.evidence_hash.substring(0, 14)}...</span>
+            <span>SHA-256: ${escapeHtml(report.evidence_hash.substring(0, 14))}...</span>
             <button id="btn-copy-hash-${report.id}" style="background: #F59E0B; color: #0B1120; border: none; border-radius: 4px; padding: 1px 6px; font-weight: 800; font-size: 9.5px; cursor: pointer;">
               Copy
             </button>
           </div>
+          ${
+            canCompareBeforeAfter
+              ? `<button id="btn-before-after-${report.id}" style="
+                  width: 100%;
+                  background: #059669;
+                  color: #FFFFFF;
+                  border: none;
+                  padding: 7px 10px;
+                  font-size: 11.5px;
+                  font-weight: 800;
+                  border-radius: 8px;
+                  cursor: pointer;
+                  margin-bottom: 6px;
+                ">
+                  ⇄ Compare Before &amp; After Slider
+                </button>`
+              : ''
+          }
           <button id="btn-case-story-${report.id}" style="
             width: 100%;
             background: linear-gradient(135deg, #F59E0B, #D97706);
@@ -273,17 +372,21 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
       `;
 
-      marker.bindPopup(popupHtml, { maxWidth: 275 });
+      marker.bindPopup(popupHtml, { maxWidth: 280 });
 
       marker.on('click', () => {
         onSelectReport(report.id);
-        map.flyTo([coords.lat, coords.lng], 16, { duration: 0.9 });
+        map.flyTo([coords.lat, coords.lng], 16, { duration: 0.85 });
       });
 
       marker.on('popupopen', () => {
         const btn = document.getElementById(`btn-case-story-${report.id}`);
         if (btn) {
           btn.onclick = () => onOpenCaseStory(report);
+        }
+        const baBtn = document.getElementById(`btn-before-after-${report.id}`);
+        if (baBtn && onOpenBeforeAfterModal) {
+          baBtn.onclick = () => onOpenBeforeAfterModal(report);
         }
         const copyBtn = document.getElementById(`btn-copy-hash-${report.id}`);
         if (copyBtn) {
@@ -297,7 +400,16 @@ export const MapView: React.FC<MapViewProps> = ({
       markersRef.current.push(marker);
       markerByIdRef.current[report.id] = { marker, lat: coords.lat, lng: coords.lng };
     });
-  }, [reports, selectedReportId, hoveredReportId, onSelectReport, onOpenCaseStory, mapStyle]);
+  }, [
+    reports,
+    disputeRecords,
+    selectedReportId,
+    hoveredReportId,
+    onSelectReport,
+    onOpenCaseStory,
+    onOpenBeforeAfterModal,
+    mapStyle,
+  ]);
 
   return (
     <div className="relative w-full h-full bg-[#0B1120] overflow-hidden select-none">
@@ -309,12 +421,12 @@ export const MapView: React.FC<MapViewProps> = ({
         <div>
           <div className="text-xs font-black tracking-wider uppercase text-slate-100 flex items-center gap-2">
             <span>Greater Noida Live Grid</span>
-            <span className="text-xs font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
+            <span className="text-xs font-mono bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded tabular-nums">
               {reports.length} Active Pins
             </span>
           </div>
           <div className="text-xs text-emerald-400 font-semibold">
-            ● Last updated just now • Real-time GPS feed
+            ● Live SLA Timers &amp; 200m Hotspot Clustering Active
           </div>
         </div>
       </div>
@@ -323,6 +435,7 @@ export const MapView: React.FC<MapViewProps> = ({
       <div className="absolute top-3 right-3 z-[450] flex items-center gap-1.5">
         <div className="flex bg-[#0B1120]/90 backdrop-blur-md p-1 rounded-xl border border-slate-700/80 shadow-xl">
           <button
+            type="button"
             onClick={() => setMapStyle('dark')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
               mapStyle === 'dark'
@@ -334,6 +447,7 @@ export const MapView: React.FC<MapViewProps> = ({
             <span>Dark Tactical</span>
           </button>
           <button
+            type="button"
             onClick={() => setMapStyle('light')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
               mapStyle === 'light'
@@ -347,6 +461,7 @@ export const MapView: React.FC<MapViewProps> = ({
         </div>
 
         <button
+          type="button"
           onClick={handleResetMap}
           title="Reset Map to Greater Noida Overview"
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#0B1120]/90 hover:bg-slate-800 backdrop-blur-md text-slate-200 border border-slate-700/80 text-xs font-bold shadow-xl transition-all"
@@ -383,7 +498,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
         <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center gap-2 text-xs text-red-400 font-bold">
           <span className="w-3.5 h-3.5 rounded-full border border-dashed border-red-400 bg-red-500/20 inline-block shrink-0"></span>
-          <span>200m Dashed Ring = 4-Citizen Hotspot</span>
+          <span>200m Dashed Ring = Corroborated Hotspot</span>
         </div>
       </div>
     </div>

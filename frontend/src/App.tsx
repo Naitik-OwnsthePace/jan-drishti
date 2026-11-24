@@ -611,6 +611,15 @@ export const App: React.FC = () => {
 
   // 6-Step Guided Judge Walkthrough Controller
   const handleRunWalkthroughStep = (step: number) => {
+    // Cleanly close any open modals/drawers from previous steps so out-of-order clicks never overlap
+    setIsReportModalOpen(false);
+    setPressKitClusterId(null);
+    setResolutionReport(null);
+    setDisputeModalReport(null);
+    setBeforeAfterReport(null);
+    setCaseStoryReportId(null);
+    setIsLoginModalOpen(false);
+
     setWalkthroughStep(step);
     setActivePreset('admin'); // Give Judge Super-Admin access during walkthrough
 
@@ -621,11 +630,10 @@ export const App: React.FC = () => {
       setIsReportModalOpen(true);
       addToast('Walkthrough Step 1/6: Citizen Report — Upload photo or click +1 Confirm On-Site', 'info');
     } else if (step === 2) {
-      setIsReportModalOpen(false);
       setCurrentRole('verifier');
       setActiveSection('map');
       setActiveTab('all');
-      const unv = reports.find((r) => r.status === 'UNVERIFIED');
+      const unv = reports.find((r) => r.status === 'UNVERIFIED' && !dismissedIds[r.id]);
       if (unv) handleSelectReport(unv.id);
       addToast('Walkthrough Step 2/6: Reviewer Queue — Needs Check sorted to top! Click Approve & Escalate.', 'info');
     } else if (step === 3) {
@@ -642,7 +650,6 @@ export const App: React.FC = () => {
       }
       addToast('Walkthrough Step 3/6: Journalist Promote & Instant 0ms Cached RTI Dossier', 'info');
     } else if (step === 4) {
-      setPressKitClusterId(null);
       setCurrentRole('authority');
       setActiveSection('map');
       setActiveTab('all');
@@ -655,19 +662,19 @@ export const App: React.FC = () => {
       }
       addToast('Walkthrough Step 4/6: Authority Upload After-Photo with Work-Order ID', 'info');
     } else if (step === 5) {
-      setResolutionReport(null);
       setCurrentRole('journalist');
       setActiveSection('map');
       setActiveTab('all');
       const resolvedRep =
-        reports.find((r) => r.status === 'RESOLVED') || reports[0];
+        reports.find((r) => r.status === 'RESOLVED' && !disputeRecords[r.id]) ||
+        reports.find((r) => r.status === 'RESOLVED') ||
+        reports[0];
       if (resolvedRep) {
         handleSelectReport(resolvedRep.id);
         setDisputeModalReport(resolvedRep);
       }
       addToast('Walkthrough Step 5/6: Press Dispute Staking (-10/+15 Trust) & Authority Right of Reply', 'info');
     } else if (step === 6) {
-      setDisputeModalReport(null);
       setActiveSection('scorecard');
       const resolvedRep = reports.find((r) => r.status === 'RESOLVED');
       if (resolvedRep) {
@@ -816,11 +823,13 @@ export const App: React.FC = () => {
           {/* Left 45% (Desktop) / Top 340px (Mobile) - OpenStreetMap */}
           <section className="w-full h-[340px] lg:w-[45%] lg:h-full shrink-0 relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/30 shadow-inner">
             <MapView
-              reports={filteredReports}
+              reports={filteredReports.filter((r) => !dismissedIds[r.id])}
+              disputeRecords={disputeRecords}
               selectedReportId={selectedReportId}
               hoveredReportId={hoveredReportId}
               onSelectReport={handleSelectReport}
               onOpenCaseStory={(rep) => setCaseStoryReportId(rep.id)}
+              onOpenBeforeAfterModal={(rep) => setBeforeAfterReport(rep)}
               flyToLocation={flyToLocation}
             />
           </section>
@@ -829,20 +838,32 @@ export const App: React.FC = () => {
           <section className="w-full flex-1 lg:w-[55%] lg:h-full flex flex-col bg-[#F1F5F9] lg:overflow-hidden">
             {/* Deep Midnight Slate Sticky RBAC & Filter Controls */}
             <div className="bg-[#0B1120] text-white px-5 py-3 border-b border-slate-800 shrink-0 space-y-2.5 shadow-md">
-              {/* Role Governance Bar: Full 4-Role Switcher for Demo Admin, or Locked Active Role Pill / Sign-In CTA */}
-              {isAdmin ? (
+              {/* Role Governance Bar: Full 4-Role Switcher when Signed In, or Read-Only Sign-In CTA when Logged Out */}
+              {isAuthenticated ? (
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center justify-between text-xs flex-wrap gap-2">
                     <span className="font-mono font-extrabold text-amber-400 uppercase">
-                      ★ Demo Admin Super-Mode — Click Any Role Below to Switch Pipeline View:
+                      {isAdmin
+                        ? '★ Demo Admin Super-Mode — Click Any Role Below to Switch Pipeline View:'
+                        : `● Authenticated (${DEMO_ACCOUNTS[activePreset!].title}) — 1-Click Role Switcher:`}
                     </span>
-                    <button
-                      onClick={handleResetDemoData}
-                      className="text-xs font-extrabold text-red-400 hover:text-red-300 flex items-center gap-1"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reset Demo Data</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsLoginModalOpen(true)}
+                        className="text-xs font-extrabold text-indigo-300 hover:text-white underline"
+                      >
+                        Account / Logout
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleResetDemoData}
+                        className="text-xs font-extrabold text-red-400 hover:text-red-300 flex items-center gap-1"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Reset Demo Data</span>
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-900/95 p-1.5 rounded-xl border border-slate-800">
                     {rolePills.map((rp, idx) => {
@@ -850,9 +871,13 @@ export const App: React.FC = () => {
                       return (
                         <button
                           key={rp.id}
+                          type="button"
                           onClick={() => {
                             setCurrentRole(rp.id);
-                            addToast(`Switched Admin View to ${rp.label} (${rp.credential})`, 'info');
+                            if (!isAdmin) {
+                              setActivePreset(rp.id);
+                            }
+                            addToast(`Switched Active Role to ${rp.label} (${rp.credential})`, 'info');
                           }}
                           className={`relative flex flex-col justify-between p-2 rounded-lg text-left transition-all ${
                             isActive
@@ -901,28 +926,16 @@ export const App: React.FC = () => {
                 <div className="flex items-center justify-between gap-3 flex-wrap bg-slate-900/95 px-3.5 py-2 rounded-xl border border-slate-800">
                   <div className="flex items-center gap-2 text-xs">
                     <Lock className="w-4 h-4 text-amber-400 shrink-0" />
-                    {isAuthenticated ? (
-                      <span>
-                        Authenticated Session:{' '}
-                        <strong className="text-amber-400">
-                          {DEMO_ACCOUNTS[activePreset!].title} ({DEMO_ACCOUNTS[activePreset!].credential})
-                        </strong>{' '}
-                        • Live Trust:{' '}
-                        <strong className="text-emerald-400 font-mono">
-                          {trustScores[currentRole]}/100
-                        </strong>
-                      </span>
-                    ) : (
-                      <span className="font-bold text-slate-200">
-                        🔒 Sign in via Demo Login to act (Currently in Public Read-Only Mode)
-                      </span>
-                    )}
+                    <span className="font-bold text-slate-200">
+                      🔒 Sign in via Demo Login to unlock 4-Role Switcher &amp; Actions (Currently in Public Read-Only Mode)
+                    </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => setIsLoginModalOpen(true)}
                     className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition-all"
                   >
-                    {isAuthenticated ? 'Switch Role / Demo Login' : 'Open Demo Login →'}
+                    Open Demo Login →
                   </button>
                 </div>
               )}
@@ -1152,7 +1165,10 @@ export const App: React.FC = () => {
           isOpen={true}
           inlinePage={true}
           reports={reports}
+          dismissedIds={dismissedIds}
+          disputeRecords={disputeRecords}
           trustScores={trustScores}
+          onOpenBeforeAfterModal={(rep) => setBeforeAfterReport(rep)}
           onSelectSectorOnMap={(loc) => {
             setSearchQuery(loc.split(' ')[0]);
             setActiveTab('all');
@@ -1234,17 +1250,30 @@ export const App: React.FC = () => {
       <ReportModal
         isOpen={isReportModalOpen}
         onClose={() => setIsReportModalOpen(false)}
-        onReportSubmitted={(msg) => {
-          loadReports();
+        onReportSubmitted={(msg, createdReport) => {
+          if (createdReport) {
+            setReports((prev) => {
+              const exists = prev.some((r) => r.id === createdReport.id);
+              return exists
+                ? prev.map((r) => (r.id === createdReport.id ? createdReport : r))
+                : [createdReport, ...prev];
+            });
+            setSelectedReportId(createdReport.id);
+            setFlyToLocation({ lat: createdReport.lat, lng: createdReport.lng });
+          } else {
+            loadReports();
+          }
           setTrustScores((prev) => ({
             ...prev,
             citizen: Math.min(100, prev.citizen + 2),
           }));
           appendActionLog(
             'Citizen #C-042',
-            `Citizen • Trust ${trustScores.citizen + 2}`,
-            'Uploaded live camera evidence & generated SHA-256 Legal Receipt',
-            'Greater Noida',
+            `Citizen • Trust ${Math.min(100, trustScores.citizen + 2)}`,
+            `Uploaded field evidence & generated SHA-256 Legal Receipt (${
+              createdReport?.category || 'Civic Hazard'
+            })`,
+            createdReport?.locality || 'Greater Noida',
             '+2 Trust'
           );
           addToast(msg || 'Tamper-Proof Evidence Receipt generated!', 'success');
@@ -1275,7 +1304,9 @@ export const App: React.FC = () => {
       <ResolutionUploadModal
         report={resolutionReport}
         onClose={() => setResolutionReport(null)}
+        onError={(errMsg) => addToast(errMsg, 'error')}
         onResolved={(msg, updatedRep, workOrderId) => {
+          setResolutionReport(null);
           if (updatedRep) {
             setDisputeRecords((prev) => {
               const next = { ...prev };
@@ -1294,8 +1325,10 @@ export const App: React.FC = () => {
             }));
             appendActionLog(
               'GNIDA Zone-3',
-              `Authority • Trust ${trustScores.authority + 4}`,
-              `Uploaded After-photo proof under Work-Order ${workOrderId || 'GNIDA/Z3/2026/WO-419'}`,
+              `Authority • Trust ${Math.min(100, trustScores.authority + 4)}`,
+              `Published After-photo proof under Work-Order ${
+                workOrderId || 'GNIDA/Z3/2026/WO-419'
+              }`,
               updatedRep.locality,
               '+4 Trust'
             );
@@ -1304,7 +1337,7 @@ export const App: React.FC = () => {
             loadReports();
           }
           addToast(
-            msg || 'CASE REVERSED & RESOLVED: Geo-verified After-photo published!',
+            msg || 'CASE FIXED & VERIFIED: Geo-verified After-photo published!',
             'success'
           );
         }}

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import type { Report, UserRole } from '../types';
+import type { Report, UserRole, DisputeRecord } from '../types';
 import {
   X,
   Award,
@@ -13,15 +13,19 @@ import {
   UserCheck,
   Scale,
   Calendar,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 interface AreaScorecardModalProps {
   isOpen: boolean;
   onClose?: () => void;
   reports: Report[];
+  dismissedIds?: Record<string, boolean>;
+  disputeRecords?: Record<string, DisputeRecord>;
   trustScores?: Record<UserRole, number>;
   inlinePage?: boolean;
   onSelectSectorOnMap?: (locality: string) => void;
+  onOpenBeforeAfterModal?: (report: Report) => void;
 }
 
 interface EnrichedSectorScore {
@@ -36,12 +40,52 @@ interface EnrichedSectorScore {
   isWorst: boolean;
   isBest: boolean;
   statusLabel: string;
+  sampleResolvedReport: Report | null;
+}
+
+function clampPercentage(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) {
+    return 0;
+  }
+  const pct = Math.round((numerator / denominator) * 100);
+  return Math.min(100, Math.max(0, pct));
+}
+
+const CORE_SECTORS = [
+  { key: 'knowledge park', label: 'Knowledge Park III', lat: 28.4749, lng: 77.4821 },
+  { key: 'beta 2', label: 'Beta 2 Sector', lat: 28.4812, lng: 77.5085 },
+  { key: 'pari chowk', label: 'Pari Chowk', lat: 28.4671, lng: 77.5138 },
+  { key: 'alpha 1', label: 'Alpha 1 Commercial Belt', lat: 28.4789, lng: 77.5012 },
+] as const;
+
+function resolveSectorKey(rep: Report): string {
+  const lower = (rep.locality || '').toLowerCase();
+  for (const sec of CORE_SECTORS) {
+    if (lower.includes(sec.key)) {
+      return sec.key;
+    }
+  }
+  // Map custom/GPS-detected pins to their nearest Greater Noida sector so totals always reconcile 100%
+  let bestKey: string = CORE_SECTORS[0].key;
+  let minSqDist = Number.POSITIVE_INFINITY;
+  for (const sec of CORE_SECTORS) {
+    const dLat = rep.lat - sec.lat;
+    const dLng = rep.lng - sec.lng;
+    const sq = dLat * dLat + dLng * dLng;
+    if (sq < minSqDist) {
+      minSqDist = sq;
+      bestKey = sec.key;
+    }
+  }
+  return bestKey;
 }
 
 export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
   isOpen,
   onClose,
   reports,
+  dismissedIds = {},
+  disputeRecords = {},
   trustScores = {
     citizen: 88,
     verifier: 92,
@@ -50,26 +94,32 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
   },
   inlinePage = false,
   onSelectSectorOnMap,
+  onOpenBeforeAfterModal,
 }) => {
-  const scorecards: EnrichedSectorScore[] = useMemo(() => {
-    const coreSectors = [
-      { key: 'knowledge park', label: 'Knowledge Park III' },
-      { key: 'beta 2', label: 'Beta 2 Sector' },
-      { key: 'pari chowk', label: 'Pari Chowk' },
-      { key: 'alpha 1', label: 'Alpha 1 Commercial Belt' },
-    ];
+  const activeReports = useMemo(
+    () => reports.filter((r) => !dismissedIds[r.id]),
+    [reports, dismissedIds]
+  );
 
-    const raw = coreSectors.map((sec) => {
-      const locReports = reports.filter((r) =>
-        r.locality.toLowerCase().includes(sec.key)
-      );
+  const getEffectiveStatus = (r: Report): Report['status'] => {
+    const disp = disputeRecords[r.id];
+    if (disp?.status === 'UPHELD' || disp?.status === 'UNDER_REVIEW') {
+      return 'SLA_BREACHED';
+    }
+    return r.status;
+  };
+
+  const scorecards: EnrichedSectorScore[] = useMemo(() => {
+    const raw = CORE_SECTORS.map((sec) => {
+      const locReports = activeReports.filter((r) => resolveSectorKey(r) === sec.key);
       const total = locReports.length;
-      const resolved = locReports.filter((r) => r.status === 'RESOLVED').length;
-      const overdue = locReports.filter((r) => r.status === 'SLA_BREACHED').length;
-      const actionNeeded = locReports.filter((r) => r.status === 'ESCALATED').length;
-      const needsCheck = locReports.filter((r) => r.status === 'UNVERIFIED').length;
-      const fixedPct = total > 0 ? Math.round((resolved / total) * 100) : 0;
-      const overduePct = total > 0 ? Math.round((overdue / total) * 100) : 0;
+      const resolvedList = locReports.filter((r) => getEffectiveStatus(r) === 'RESOLVED');
+      const resolved = resolvedList.length;
+      const overdue = locReports.filter((r) => getEffectiveStatus(r) === 'SLA_BREACHED').length;
+      const actionNeeded = locReports.filter((r) => getEffectiveStatus(r) === 'ESCALATED').length;
+      const needsCheck = locReports.filter((r) => getEffectiveStatus(r) === 'UNVERIFIED').length;
+      const fixedPct = clampPercentage(resolved, total);
+      const overduePct = clampPercentage(overdue, total);
 
       return {
         locality: sec.label,
@@ -80,6 +130,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
         needsCheck,
         fixedPct,
         overduePct,
+        sampleResolvedReport: resolvedList[0] || null,
       };
     });
 
@@ -95,7 +146,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
 
     return sorted.map((item) => {
       const isWorst = item.locality === worstLocality && item.overdue > 0;
-      const isBest = item.locality === bestLocality && !isWorst;
+      const isBest = item.locality === bestLocality && !isWorst && item.resolved > 0;
       let statusLabel = 'Action In Progress';
       if (isWorst) statusLabel = 'Worst Performing • Urgent';
       else if (isBest) statusLabel = 'Best Performing • Responsive';
@@ -109,24 +160,20 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
         statusLabel,
       };
     });
-  }, [reports]);
+  }, [activeReports, disputeRecords]);
 
   if (!isOpen) return null;
 
-  const totalOverdue = reports.filter((r) => r.status === 'SLA_BREACHED').length;
-  const overallFixedRate =
-    reports.length > 0
-      ? Math.round(
-          (reports.filter((r) => r.status === 'RESOLVED').length / reports.length) * 100
-        )
-      : 0;
+  const totalResolved = activeReports.filter((r) => getEffectiveStatus(r) === 'RESOLVED').length;
+  const totalOverdue = activeReports.filter((r) => getEffectiveStatus(r) === 'SLA_BREACHED').length;
+  const overallFixedRate = clampPercentage(totalResolved, activeReports.length);
 
   const trustLeaderboard = [
     {
       role: 'Reviewer (Auditor)',
       handle: 'Truth Engine Auditor • #AUD-01',
       score: trustScores.verifier,
-      metric: '16 EXIF / Haversine Audits • 98.4% Accuracy',
+      metric: `${activeReports.length} EXIF / Haversine Audits • 98.4% Accuracy`,
       badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
       icon: <ShieldCheck className="w-4 h-4 text-indigo-600" />,
     },
@@ -134,7 +181,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
       role: 'Citizen Reporter',
       handle: 'Verified Citizen #C-042 (Naitik B.)',
       score: trustScores.citizen,
-      metric: '11 Corroborated GPS Submissions • 0 Fake Flags',
+      metric: 'Corroborated GPS Submissions • SHA-256 Sealed',
       badgeColor: 'bg-sky-100 text-sky-900 border-sky-300',
       icon: <UserCheck className="w-4 h-4 text-sky-600" />,
     },
@@ -142,7 +189,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
       role: 'Municipal Authority',
       handle: 'GNIDA Official Zone-3 • #Z3-ENG',
       score: trustScores.authority,
-      metric: 'Avg Fix Clock: 19h • Before/After Proof Verified',
+      metric: `${totalResolved} Verified Fixes (${overallFixedRate}%) • After-Proof Published`,
       badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
       icon: <Building2 className="w-4 h-4 text-emerald-600" />,
     },
@@ -150,20 +197,20 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
       role: 'Accredited Journalist',
       handle: 'Accredited Press Desk • #JD-204',
       score: trustScores.journalist,
-      metric: '4 Statutory RTI Dossiers • Staked Dispute Audits',
+      metric: 'Statutory RTI Dossiers • Staked Dispute Audits',
       badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
       icon: <Scale className="w-4 h-4 text-rose-600" />,
     },
   ].sort((a, b) => b.score - a.score);
 
   const sevenDayTrend = [
-    { day: 'Nov 17', submitted: 2, resolved: 1, avgTime: '28h' },
-    { day: 'Nov 18', submitted: 3, resolved: 1, avgTime: '19h' },
-    { day: 'Nov 19', submitted: 2, resolved: 2, avgTime: '11h' },
-    { day: 'Nov 20', submitted: 3, resolved: 1, avgTime: '28h' },
-    { day: 'Nov 21', submitted: 3, resolved: 2, avgTime: '19h' },
-    { day: 'Nov 22', submitted: 2, resolved: 1, avgTime: '11h' },
-    { day: 'Nov 23', submitted: 1, resolved: 1, avgTime: '4h' },
+    { day: 'Nov 18', submitted: 3, resolved: 1, avgTime: '28h' },
+    { day: 'Nov 19', submitted: 2, resolved: 1, avgTime: '19h' },
+    { day: 'Nov 20', submitted: 3, resolved: 2, avgTime: '11h' },
+    { day: 'Nov 21', submitted: 3, resolved: 1, avgTime: '28h' },
+    { day: 'Nov 22', submitted: 2, resolved: 2, avgTime: '19h' },
+    { day: 'Nov 23', submitted: 2, resolved: 1, avgTime: '11h' },
+    { day: 'Nov 24', submitted: 1, resolved: Math.max(1, totalResolved - 2), avgTime: '4h' },
   ];
 
   const innerContent = (
@@ -172,7 +219,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
       className={
         inlinePage
           ? 'w-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden'
-          : 'relative z-[9999] bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-scale-up'
+          : 'relative z-[9999] bg-white rounded-2xl w-full max-w-4xl max-h-[92vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-scale-up overscroll-contain'
       }
     >
       {/* Deep Midnight Slate Header */}
@@ -186,8 +233,8 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
               <h2 className="text-lg font-extrabold">
                 Greater Noida Area Accountability Scorecard &amp; Trust Leaderboard
               </h2>
-              <span className="text-xs font-mono bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded border border-amber-500/30 font-extrabold uppercase">
-                Sector Leaderboard ({reports.length} Total Reports)
+              <span className="text-xs font-mono bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded border border-amber-500/30 font-extrabold uppercase tabular-nums">
+                Sector Leaderboard ({activeReports.length} Active Reports)
               </span>
             </div>
             <p className="text-xs text-slate-400">
@@ -197,6 +244,8 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
         </div>
         {!inlinePage && onClose && (
           <button
+            type="button"
+            aria-label="Close Area Accountability Scorecard"
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
@@ -211,14 +260,14 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
             <span className="text-xs font-black text-slate-500 uppercase tracking-wider">
-              City-Wide Fixed %
+              City-Wide Fixed Rate
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-black text-emerald-700 font-mono">
-                {overallFixedRate}%
+              <span className="text-3xl font-black text-emerald-700 font-mono tabular-nums">
+                {`${overallFixedRate}%`}
               </span>
               <span className="text-xs font-bold text-emerald-600 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-1" /> With After-Proof
+                <TrendingUp className="w-4 h-4 mr-1" /> ({totalResolved}/{activeReports.length} Fixed)
               </span>
             </div>
           </div>
@@ -228,12 +277,10 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
               Overdue (Ignored Past SLA)
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-black text-red-700 font-mono">
+              <span className="text-3xl font-black text-red-700 font-mono tabular-nums">
                 {totalOverdue}
               </span>
-              <span className="text-xs font-bold text-red-600">
-                Active SLA Breaches
-              </span>
+              <span className="text-xs font-bold text-red-600">Active SLA Breaches</span>
             </div>
           </div>
 
@@ -242,17 +289,17 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
               Audited Greater Noida Zones
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-black text-slate-900 font-mono">
+              <span className="text-3xl font-black text-slate-900 font-mono tabular-nums">
                 {scorecards.length}
               </span>
               <span className="text-xs font-bold text-slate-600 flex items-center">
-                <Building2 className="w-4 h-4 mr-1" /> Based on {reports.length} reports
+                <Building2 className="w-4 h-4 mr-1" /> Based on {activeReports.length} reports
               </span>
             </div>
           </div>
         </div>
 
-        {/* Sector Comparison Cards (Full un-truncated sector names with flex-wrap gap-2) */}
+        {/* Sector Comparison Cards */}
         <div className={inlinePage ? 'grid grid-cols-1 lg:grid-cols-2 gap-5' : 'space-y-4'}>
           {scorecards.map((score) => {
             let cardBorder = 'border-slate-200 bg-white';
@@ -271,7 +318,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                 key={score.locality}
                 className={`p-5 rounded-2xl border transition-all flex flex-col justify-between gap-4 ${cardBorder}`}
               >
-                {/* Un-truncated Sector Header Row with flex-wrap gap-2 */}
+                {/* Un-truncated Sector Header Row */}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2.5">
                     {score.isWorst ? (
@@ -303,8 +350,19 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                     >
                       {score.statusLabel}
                     </span>
+                    {score.sampleResolvedReport && onOpenBeforeAfterModal && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenBeforeAfterModal(score.sampleResolvedReport!)}
+                        className="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1 transition-all shadow-xs whitespace-nowrap"
+                      >
+                        <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                        <span>Before/After</span>
+                      </button>
+                    )}
                     {onSelectSectorOnMap && (
                       <button
+                        type="button"
                         onClick={() => onSelectSectorOnMap(score.locality)}
                         className="px-3 py-1.5 rounded-xl bg-[#0B1120] hover:bg-slate-800 text-amber-400 text-xs font-extrabold flex items-center gap-1 transition-all shadow-xs whitespace-nowrap"
                       >
@@ -315,7 +373,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                   </div>
                 </div>
 
-                {/* Progress Bars with % Labels */}
+                {/* Progress Bars with Clean Tabular % Labels */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                   {/* Fixed % Bar */}
                   <div className="space-y-1.5">
@@ -323,12 +381,14 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                       <span className="text-emerald-800">
                         Fixed &amp; Verified ({score.resolved}/{score.total})
                       </span>
-                      <span className="font-mono text-emerald-800">{score.fixedPct}%</span>
+                      <span className="font-mono text-emerald-800 tabular-nums">
+                        {`${score.fixedPct}%`}
+                      </span>
                     </div>
                     <div className="w-full h-4 rounded-full bg-slate-200 overflow-hidden p-0.5">
                       <div
                         className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(score.fixedPct, 4)}%` }}
+                        style={{ width: `${score.fixedPct > 0 ? Math.max(score.fixedPct, 6) : 0}%` }}
                       />
                     </div>
                   </div>
@@ -339,12 +399,14 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                       <span className="text-red-700">
                         Overdue / Ignored ({score.overdue}/{score.total})
                       </span>
-                      <span className="font-mono text-red-700">{score.overduePct}%</span>
+                      <span className="font-mono text-red-700 tabular-nums">
+                        {`${score.overduePct}%`}
+                      </span>
                     </div>
                     <div className="w-full h-4 rounded-full bg-slate-200 overflow-hidden p-0.5">
                       <div
                         className="h-full bg-red-600 rounded-full transition-all duration-500"
-                        style={{ width: `${Math.max(score.overduePct, 4)}%` }}
+                        style={{ width: `${score.overduePct > 0 ? Math.max(score.overduePct, 6) : 0}%` }}
                       />
                     </div>
                   </div>
@@ -354,19 +416,27 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                 <div className="grid grid-cols-4 gap-2 pt-3 border-t border-slate-200/70 text-center text-xs">
                   <div className="bg-white/90 py-2 rounded-xl border border-slate-200/80">
                     <span className="text-xs text-slate-500 font-bold block">Total Issues</span>
-                    <span className="font-black font-mono text-sm text-slate-900">{score.total}</span>
+                    <span className="font-black font-mono text-sm text-slate-900 tabular-nums">
+                      {score.total}
+                    </span>
                   </div>
                   <div className="bg-red-50/80 py-2 rounded-xl border border-red-200/70">
-                    <span className="text-xs text-red-600 font-bold block">Overdue %</span>
-                    <span className="font-black font-mono text-sm text-red-700">{score.overduePct}%</span>
+                    <span className="text-xs text-red-600 font-bold block">Overdue Rate</span>
+                    <span className="font-black font-mono text-sm text-red-700 tabular-nums">
+                      {`${score.overduePct}%`}
+                    </span>
                   </div>
                   <div className="bg-amber-50/80 py-2 rounded-xl border border-amber-200/70">
                     <span className="text-xs text-amber-800 font-bold block">Action Needed</span>
-                    <span className="font-black font-mono text-sm text-amber-900">{score.actionNeeded}</span>
+                    <span className="font-black font-mono text-sm text-amber-900 tabular-nums">
+                      {score.actionNeeded}
+                    </span>
                   </div>
                   <div className="bg-emerald-50/80 py-2 rounded-xl border border-emerald-200/70">
-                    <span className="text-xs text-emerald-700 font-bold block">Fixed %</span>
-                    <span className="font-black font-mono text-sm text-emerald-800">{score.fixedPct}%</span>
+                    <span className="text-xs text-emerald-700 font-bold block">Fixed Rate</span>
+                    <span className="font-black font-mono text-sm text-emerald-800 tabular-nums">
+                      {`${score.fixedPct}%`}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -411,7 +481,9 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                         <span className="font-extrabold text-sm text-slate-950">
                           {entry.handle}
                         </span>
-                        <span className={`px-2 py-0.5 rounded text-xs font-extrabold border ${entry.badgeColor}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-extrabold border ${entry.badgeColor}`}
+                        >
                           {entry.role}
                         </span>
                       </div>
@@ -420,7 +492,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                   </div>
 
                   <div className="text-right shrink-0">
-                    <div className="font-mono text-lg font-black text-slate-950">
+                    <div className="font-mono text-lg font-black text-slate-950 tabular-nums">
                       {entry.score}
                       <span className="text-xs text-slate-400">/100</span>
                     </div>
@@ -458,14 +530,14 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
                 >
                   <span className="font-mono font-bold text-slate-800 w-16">{d.day}</span>
                   <div className="flex-1 px-2 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold">
+                    <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 font-bold tabular-nums">
                       +{d.submitted} Reported
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">
+                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold tabular-nums">
                       ✔ {d.resolved} Fixed
                     </span>
                   </div>
-                  <span className="font-mono font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  <span className="font-mono font-extrabold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200 tabular-nums">
                     Avg {d.avgTime}
                   </span>
                 </div>
@@ -480,9 +552,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
   if (inlinePage) {
     return (
       <div className="flex-1 overflow-y-auto bg-[#F1F5F9] py-8">
-        <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10">
-          {innerContent}
-        </div>
+        <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10">{innerContent}</div>
       </div>
     );
   }
@@ -490,7 +560,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overscroll-contain"
     >
       {innerContent}
     </div>

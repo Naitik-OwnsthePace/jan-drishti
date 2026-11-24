@@ -64,7 +64,10 @@ function renderEditorialMarkdown(markdown: string): React.ReactNode {
         if (line.startsWith('#')) {
           const levelMatch = line.match(/^(#+)\s*(.*)$/);
           const level = levelMatch ? levelMatch[1].length : 2;
-          const headingText = (levelMatch ? levelMatch[2] : line.replace(/^#+\s*/, '')).replace(/\*\*/g, '');
+          const headingText = (levelMatch ? levelMatch[2] : line.replace(/^#+\s*/, '')).replace(
+            /\*\*/g,
+            ''
+          );
 
           if (level === 1) {
             return (
@@ -136,21 +139,53 @@ export const PressKitModal: React.FC<PressKitModalProps> = ({
 
   useEffect(() => {
     if (!clusterId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [clusterId, onClose]);
+
+  useEffect(() => {
+    if (!clusterId) return;
+    let active = true;
 
     setLoading(true);
     setError(null);
     setActiveTab('news');
     setLang('en');
-    setHindiCache({});
-    fetchPressKit(clusterId, allReports)
-      .then((res) => {
+    setTranslating(false);
+
+    (async () => {
+      try {
+        const res = await fetchPressKit(clusterId, allReports);
+        if (!active) return;
         setData(res);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message || 'Failed to generate media & RTI dossier');
-        setLoading(false);
-      });
+
+        // Pre-seed bilingual Hindi cache for instant 0ms switching
+        const initialHindi: Partial<Record<DossierTab, string>> = {};
+        if (res.rti_notice_hi) initialHindi.rti = res.rti_notice_hi;
+        if (res.social_thread_hi) initialHindi.social = res.social_thread_hi;
+        if (
+          res.investigative_brief_hi &&
+          (!res.model_used || res.model_used.includes('fallback'))
+        ) {
+          initialHindi.news = res.investigative_brief_hi;
+        }
+        setHindiCache(initialHindi);
+      } catch (err: any) {
+        if (!active) return;
+        setError(err?.message || 'Failed to generate media & RTI dossier');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [clusterId, allReports]);
 
   const formattedOutputs = useMemo(() => {
@@ -169,12 +204,12 @@ export const PressKitModal: React.FC<PressKitModalProps> = ({
     ).toFixed(5);
     const maxSeverity = Math.max(...data.reports.map((r) => r.severity));
 
-    let overdueHours = 14;
+    let overdueHours = 19;
     const breachedReport = data.reports.find((r) => r.sla_deadline);
     if (breachedReport && breachedReport.sla_deadline) {
       const diff = Date.now() - new Date(breachedReport.sla_deadline).getTime();
       if (diff > 0) {
-        overdueHours = Math.max(1, Math.floor(diff / (1000 * 60 * 60)));
+        overdueHours = Math.max(4, Math.min(72, Math.floor(diff / (1000 * 60 * 60))));
       }
     }
 
@@ -187,7 +222,9 @@ export const PressKitModal: React.FC<PressKitModalProps> = ({
       )
       .join('\n');
 
-    const rtiNotice = `FORM 'A'
+    const rtiNotice =
+      data.rti_notice ||
+      `FORM 'A'
 APPLICATION FOR INFORMATION UNDER SECTION 6(1) OF THE RIGHT TO INFORMATION ACT, 2005
 
 To,
@@ -197,10 +234,10 @@ Plot No. 01, Knowledge Park-IV, Greater Noida, Gautam Buddha Nagar, UP – 20131
 Official Civic Helpline / WhatsApp Citizen Desk: 8800203912
 
 Date: ${new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-    })}
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+      })}
 Subject: Urgent Statutory Inquiry Regarding Unresolved ${category} Hotspot at ${locality} (Ignored ${overdueHours} Hours Past SLA Deadline)
 
 Respected Sir / Madam,
@@ -224,7 +261,7 @@ ${hashList}
    (d) Please specify the exact date and time by which field remediation will be completed and verified.
 
 Yours faithfully,
-[Citizen / Accredited Journalist Applicant]
+[Citizen / Accredited Journalist Applicant #JD-204]
 Generated via Jan Drishti — People's Civic Truth Engine`;
 
     const socialThread = `### Part 1 of 3 — Public Safety Alert
@@ -257,7 +294,7 @@ ${data.reports
     };
   }, [data]);
 
-  // Trigger Hindi translation when lang === 'hi' and activeTab isn't cached yet
+  // Trigger Hindi translation with strict try/catch/finally + pre-written Hindi fallback if not yet cached
   useEffect(() => {
     if (lang !== 'hi' || !data) return;
     if (hindiCache[activeTab]) return;
@@ -265,14 +302,46 @@ ${data.reports
     const sourceText = formattedOutputs[activeTab];
     if (!sourceText) return;
 
+    let active = true;
     setTranslating(true);
-    translateToHindi(sourceText)
-      .then((translatedText) => {
-        setHindiCache((prev) => ({ ...prev, [activeTab]: translatedText }));
-      })
-      .finally(() => {
-        setTranslating(false);
-      });
+
+    (async () => {
+      try {
+        const translatedText = await translateToHindi(sourceText);
+        if (!active) return;
+        const prewrittenFallback =
+          activeTab === 'news'
+            ? data.investigative_brief_hi
+            : activeTab === 'rti'
+            ? data.rti_notice_hi
+            : data.social_thread_hi;
+
+        const finalText =
+          translatedText && translatedText !== sourceText
+            ? translatedText
+            : prewrittenFallback || translatedText;
+        setHindiCache((prev) => ({ ...prev, [activeTab]: finalText }));
+      } catch {
+        if (!active) return;
+        const prewrittenFallback =
+          activeTab === 'news'
+            ? data.investigative_brief_hi
+            : activeTab === 'rti'
+            ? data.rti_notice_hi
+            : data.social_thread_hi;
+        if (prewrittenFallback) {
+          setHindiCache((prev) => ({ ...prev, [activeTab]: prewrittenFallback }));
+        }
+      } finally {
+        if (active) {
+          setTranslating(false);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
   }, [lang, activeTab, data, formattedOutputs, hindiCache]);
 
   if (!clusterId) return null;
@@ -284,8 +353,17 @@ ${data.reports
       ? formattedOutputs.rti
       : formattedOutputs.social;
 
+  const fallbackHindiForTab =
+    activeTab === 'news'
+      ? data?.investigative_brief_hi
+      : activeTab === 'rti'
+      ? data?.rti_notice_hi
+      : data?.social_thread_hi;
+
   const currentTabContent =
-    lang === 'hi' ? hindiCache[activeTab] || englishContent : englishContent;
+    lang === 'hi'
+      ? hindiCache[activeTab] || fallbackHindiForTab || englishContent
+      : englishContent;
 
   const handleCopyActiveTab = () => {
     if (!data) return;
@@ -299,35 +377,41 @@ ${data.reports
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in overscroll-contain"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="press-kit-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative z-[9999] bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200"
+        className="relative z-[9999] bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] shadow-2xl flex flex-col overflow-hidden border border-slate-200 overscroll-contain"
       >
         {/* Sticky Unobstructed Top Header */}
-        <div className="px-6 py-4 bg-[#0B1120] text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+        <div className="px-6 py-4 bg-[#0B1120] text-white flex items-center justify-between border-b border-slate-800 shrink-0 flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
               <FileText className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold">Media &amp; Statutory RTI Dossier</h2>
+                <h2 id="press-kit-modal-title" className="text-base font-extrabold">
+                  Media &amp; Statutory RTI Dossier
+                </h2>
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30 font-extrabold uppercase">
                   Investigative Desk
                 </span>
               </div>
               <p className="text-xs text-slate-400 font-mono truncate max-w-md">
-                Hotspot ID: {clusterId}
+                Hotspot ID: {clusterId} • Cached Instant Dossier
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             {/* Bilingual English | हिन्दी (Hindi) Toggle */}
             <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-700">
               <button
+                type="button"
                 onClick={() => setLang('en')}
                 className={`px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
                   lang === 'en' ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:text-white'
@@ -336,6 +420,7 @@ ${data.reports
                 English
               </button>
               <button
+                type="button"
                 onClick={() => setLang('hi')}
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-extrabold transition-all ${
                   lang === 'hi' ? 'bg-amber-500 text-slate-950' : 'text-slate-300 hover:text-white'
@@ -347,6 +432,7 @@ ${data.reports
             </div>
 
             <button
+              type="button"
               onClick={() => {
                 if (data) {
                   downloadRtiNoticePdf(data.reports, data.cluster_id);
@@ -360,6 +446,7 @@ ${data.reports
             </button>
 
             <button
+              type="button"
               onClick={handleCopyActiveTab}
               disabled={!data || loading}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-black transition-all shadow-md"
@@ -368,6 +455,8 @@ ${data.reports
               <span>{copied ? 'Copied!' : 'Copy to Clipboard'}</span>
             </button>
             <button
+              type="button"
+              aria-label="Close Media and RTI Dossier modal"
               onClick={onClose}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             >
@@ -379,6 +468,7 @@ ${data.reports
         {/* Sticky Unobstructed 3-Tab Format Bar */}
         <div className="px-6 py-3 bg-slate-900 border-b border-slate-800 flex items-center gap-2.5 shrink-0 overflow-x-auto no-scrollbar">
           <button
+            type="button"
             onClick={() => setActiveTab('news')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
               activeTab === 'news'
@@ -391,6 +481,7 @@ ${data.reports
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('rti')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
               activeTab === 'rti'
@@ -403,6 +494,7 @@ ${data.reports
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('social')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
               activeTab === 'social'
@@ -416,7 +508,7 @@ ${data.reports
         </div>
 
         {/* Scrollable Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8FAFC]">
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-[#F8FAFC] overscroll-contain">
           {loading ? (
             <div className="py-20 text-center space-y-3">
               <Loader2 className="w-8 h-8 text-amber-600 animate-spin mx-auto" />
@@ -437,7 +529,9 @@ ${data.reports
               {/* Full Photo Evidence Gallery with SHA-256 Hashes */}
               <div>
                 <div className="text-xs font-extrabold uppercase tracking-wider text-slate-500 mb-2.5 flex items-center justify-between">
-                  <span>Corroborated Photo Evidence Gallery ({data.report_count} Citizen Reports)</span>
+                  <span>
+                    Corroborated Photo Evidence Gallery ({data.report_count} Citizen Reports)
+                  </span>
                   <span className="text-[11px] text-emerald-700 font-bold flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                     SHA-256 Cryptographically Sealed
@@ -480,11 +574,12 @@ ${data.reports
 
               {/* Active Format Document Box */}
               <div className="bg-white rounded-2xl p-6 border border-slate-200/90 text-slate-900 shadow-sm space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
                   <div className="font-black text-xs uppercase tracking-wider text-slate-500 flex items-center gap-2">
                     <span>
                       {activeTab === 'news' && 'Investigative Newsroom Dossier'}
-                      {activeTab === 'rti' && 'Right to Information Act, 2005 — Statutory Section 6(1) Notice'}
+                      {activeTab === 'rti' &&
+                        'Right to Information Act, 2005 — Statutory Section 6(1) Notice'}
                       {activeTab === 'social' && '3-Part Public Accountability Social Thread'}
                     </span>
                     {translating && (

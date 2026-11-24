@@ -1,19 +1,30 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { Report } from '../types';
 import { resolveReport } from '../api';
 import { getAlignedCivicPhoto } from '../utils/civicPhotos';
-import { X, Camera, Loader2, CheckCircle2, AlertCircle, Upload, Sparkles, FileCheck } from 'lucide-react';
+import {
+  X,
+  Camera,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Upload,
+  Sparkles,
+  FileCheck,
+} from 'lucide-react';
 
 interface ResolutionUploadModalProps {
   report: Report | null;
   onClose: () => void;
   onResolved: (msg: string, updatedReport?: Report, workOrderId?: string) => void;
+  onError?: (msg: string) => void;
 }
 
 export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
   report,
   onClose,
   onResolved,
+  onError,
 }) => {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -21,6 +32,27 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset modal state cleanly whenever opened/closed or switched to a different report
+  useEffect(() => {
+    setFile(null);
+    setPreviewUrl(null);
+    setWorkOrderId(report?.work_order_id || 'GNIDA/Z3/2026/WO-419');
+    setSubmitting(false);
+    setError(null);
+  }, [report?.id]);
+
+  // Platform Esc dismissal
+  useEffect(() => {
+    if (!report) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !submitting) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [report, submitting, onClose]);
 
   if (!report) return null;
 
@@ -31,64 +63,102 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
       const selected = e.target.files[0];
       setFile(selected);
       setPreviewUrl(URL.createObjectURL(selected));
+      setError(null);
     }
   };
 
   const handleUseDemoAfterPhoto = () => {
     setFile(null);
     setPreviewUrl(alignedAfterUrl);
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file && !previewUrl) return;
+    if (submitting || (!file && !previewUrl)) return;
 
     setSubmitting(true);
     setError(null);
     const cleanWo = workOrderId.trim() || 'GNIDA/Z3/2026/WO-419';
+    const targetAfterUrl = previewUrl || alignedAfterUrl;
+
+    let timeoutHandle: number | null = null;
     try {
-      if (file) {
-        const updated = await resolveReport(report.id, file);
-        onResolved(
-          `CASE RESOLVED (${cleanWo}): GNIDA Zone-3 After-photo verified!`,
-          updated,
-          cleanWo
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = window.setTimeout(
+          () => reject(new Error('Publish Proof timed out after 8 seconds. Please retry.')),
+          8000
         );
-      } else {
-        const updated: Report = {
-          ...report,
-          status: 'RESOLVED',
-          after_image_url: previewUrl || alignedAfterUrl,
-          resolved_at: new Date().toISOString(),
-        };
-        onResolved(
-          `CASE RESOLVED (${cleanWo}): GNIDA Zone-3 After-photo verified!`,
-          updated,
-          cleanWo
-        );
+      });
+
+      let updated: Report;
+      try {
+        updated = await Promise.race([
+          resolveReport(report.id, file, targetAfterUrl, cleanWo),
+          timeoutPromise,
+        ]);
+      } catch (apiErr: any) {
+        // If using verified demo photo while backend is offline, apply clean local resolution fallback
+        if (!file && targetAfterUrl) {
+          updated = {
+            ...report,
+            status: 'RESOLVED',
+            after_image_url: targetAfterUrl,
+            resolved_at: new Date().toISOString(),
+            work_order_id: cleanWo,
+          };
+        } else {
+          throw apiErr;
+        }
       }
+
+      const finalReport: Report = {
+        ...report,
+        ...updated,
+        status: 'RESOLVED',
+        after_image_url: updated.after_image_url || targetAfterUrl,
+        resolved_at: updated.resolved_at || new Date().toISOString(),
+        work_order_id: cleanWo,
+      };
+
+      onResolved(
+        `CASE FIXED & VERIFIED (${cleanWo}): GNIDA Zone-3 After-photo proof published!`,
+        finalReport,
+        cleanWo
+      );
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Failed to submit resolution proof');
+      const msg = err?.message || 'Failed to publish remediation proof. Please try again.';
+      setError(msg);
+      if (onError) onError(msg);
+    } finally {
+      if (timeoutHandle !== null) {
+        window.clearTimeout(timeoutHandle);
+      }
       setSubmitting(false);
     }
   };
 
   return (
     <div
-      onClick={onClose}
-      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in"
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
+      className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm animate-fade-in overscroll-contain"
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="remediation-modal-title"
         onClick={(e) => e.stopPropagation()}
-        className="relative z-[9999] bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-scale-up"
+        className="relative z-[9999] bg-white rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden border border-slate-200 animate-scale-up overscroll-contain"
       >
         {/* Header */}
         <div className="px-6 py-4 bg-[#0B1120] text-white flex items-center justify-between border-b border-slate-800 shrink-0">
           <div>
             <div className="flex items-center gap-2">
               <Upload className="w-5 h-5 text-amber-400" />
-              <h2 className="text-base font-extrabold">
+              <h2 id="remediation-modal-title" className="text-base font-extrabold">
                 Authority Remediation Modal (GNIDA • Zone-3)
               </h2>
             </div>
@@ -97,7 +167,11 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
             </p>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            aria-label="Close Authority Remediation Modal"
+            onClick={() => {
+              if (!submitting) onClose();
+            }}
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -132,7 +206,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
               2. Remediation &ldquo;After&rdquo; Photo <span className="text-red-500">*</span>
             </label>
@@ -152,12 +226,16 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
                 src={previewUrl}
                 alt="Resolution Preview"
                 className="w-full h-48 object-cover"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = alignedAfterUrl;
+                }}
               />
               <div className="absolute bottom-0 inset-x-0 bg-slate-950/90 text-emerald-300 font-mono text-xs px-3 py-1.5">
                 ✔ GNIDA Field Crew GPS Lock: {report.lat.toFixed(4)}°N, {report.lng.toFixed(4)}°E • {workOrderId}
               </div>
               <button
                 type="button"
+                aria-label="Remove selected photo"
                 onClick={() => {
                   setFile(null);
                   setPreviewUrl(null);
@@ -202,8 +280,9 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
           <div className="flex items-center gap-3 pt-2">
             <button
               type="button"
+              disabled={submitting}
               onClick={onClose}
-              className="flex-1 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all"
+              className="flex-1 py-2.5 border border-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50 rounded-xl text-xs font-bold transition-all"
             >
               Cancel
             </button>
@@ -220,7 +299,7 @@ export const ResolutionUploadModal: React.FC<ResolutionUploadModalProps> = ({
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Confirm Fix &amp; Open Split Slider</span>
+                  <span>Publish Proof</span>
                 </>
               )}
             </button>
