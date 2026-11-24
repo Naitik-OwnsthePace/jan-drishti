@@ -1,7 +1,7 @@
 import type { Report, PressKitData } from './types';
 import { getAlignedCivicPhoto } from './utils/civicPhotos';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const AI_TIMEOUT_MS = 10000;
 const STANDARD_TIMEOUT_MS = 8000;
 
