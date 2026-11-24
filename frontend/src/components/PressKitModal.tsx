@@ -27,6 +27,13 @@ interface PressKitModalProps {
   onCopiedToast?: () => void;
 }
 
+const EVIDENCE_GALLERY_CYCLE = [
+  '/evidence/wire_before.jpg',
+  '/evidence/road_before.jpg',
+  '/evidence/drain_before.jpg',
+  '/evidence/garbage_before.jpg',
+];
+
 type DossierTab = 'news' | 'rti' | 'social';
 
 function renderInlineText(line: string): React.ReactNode {
@@ -546,12 +553,18 @@ ${data.reports
                     >
                       <div className="relative h-28 rounded-lg overflow-hidden bg-slate-200">
                         <img
-                          src={report.image_url || getAlignedCivicPhoto(report).beforeUrl}
+                          src={
+                            report.image_url && !report.image_url.startsWith('/evidence/')
+                              ? report.image_url
+                              : data.reports.length === 1
+                              ? report.image_url || getAlignedCivicPhoto(report).beforeUrl
+                              : EVIDENCE_GALLERY_CYCLE[idx % EVIDENCE_GALLERY_CYCLE.length]
+                          }
                           alt={report.title}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src =
-                              getAlignedCivicPhoto(report).beforeUrl;
+                              EVIDENCE_GALLERY_CYCLE[idx % EVIDENCE_GALLERY_CYCLE.length];
                           }}
                         />
                         <span className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded bg-[#0B1120]/90 text-[10px] font-extrabold text-amber-400 font-mono">

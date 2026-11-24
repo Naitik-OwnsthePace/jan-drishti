@@ -80,7 +80,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
   ];
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F1F5F9]">
+    <div className="flex-1 bg-[#F1F5F9]">
       {/* Editorial Hero Banner */}
       <section className="bg-[#0B1120] text-white border-b border-slate-800 relative overflow-hidden">
         <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10 py-10 lg:py-12 relative z-10">
@@ -152,7 +152,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
       </section>
 
       {/* Main Content Container */}
-      <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10 py-8 space-y-8">
+      <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10 pt-8 pb-16 space-y-8">
         {/* Live Citywide Impact Counters */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div

@@ -551,7 +551,7 @@ export const AreaScorecardModal: React.FC<AreaScorecardModalProps> = ({
 
   if (inlinePage) {
     return (
-      <div className="flex-1 overflow-y-auto bg-[#F1F5F9] py-8">
+      <div className="flex-1 bg-[#F1F5F9] pt-8 pb-8">
         <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10">{innerContent}</div>
       </div>
     );

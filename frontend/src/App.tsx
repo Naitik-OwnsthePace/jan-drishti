@@ -103,8 +103,8 @@ export const App: React.FC = () => {
   const [trustScores, setTrustScores] = useState<Record<UserRole, number>>(INITIAL_TRUST_SCORES);
   const [actionLog, setActionLog] = useState<PublicActionLogEntry[]>(INITIAL_ACTION_LOG);
 
-  // Guided 6-Step Judge Walkthrough Bar
-  const [showWalkthrough, setShowWalkthrough] = useState<boolean>(true);
+  // Guided 6-Step Judge Walkthrough Bar (collapsed by default on page load)
+  const [showWalkthrough, setShowWalkthrough] = useState<boolean>(false);
   const [walkthroughStep, setWalkthroughStep] = useState<number>(1);
 
   // Map & Feed UI state
@@ -149,7 +149,7 @@ export const App: React.FC = () => {
     toastTimerRef.current = window.setTimeout(() => {
       setToasts([]);
       toastTimerRef.current = null;
-    }, 3600);
+    }, 3000);
   };
 
   const removeToast = (id: string) => {
@@ -767,7 +767,7 @@ export const App: React.FC = () => {
   const roleBanner = getRoleInstructionBanner();
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#F1F5F9]">
+    <div className="min-h-screen w-full flex flex-col bg-[#F1F5F9]">
       {/* 5-Section Command Topbar */}
       <Navbar
         activeSection={activeSection}
@@ -797,6 +797,7 @@ export const App: React.FC = () => {
         onClose={() => setShowWalkthrough(false)}
       />
 
+      <main className="flex-1 flex flex-col pb-16">
       {/* SECTION 1: HOME */}
       {activeSection === 'home' && (
         <HomeView
@@ -819,9 +820,9 @@ export const App: React.FC = () => {
 
       {/* SECTION 2: LIVE COMMAND MAP (Stacks cleanly on mobile 390px, 45%/55% split on desktop) */}
       {activeSection === 'map' && (
-        <div className="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden">
-          {/* Left 45% (Desktop) / Top 340px (Mobile) - OpenStreetMap */}
-          <section className="w-full h-[340px] lg:w-[45%] lg:h-full shrink-0 relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/30 shadow-inner">
+        <div className="flex-1 flex flex-col lg:flex-row">
+          {/* Left 45% (Desktop) / Top 360px (Mobile) - OpenStreetMap */}
+          <section className="w-full h-[360px] lg:w-[45%] lg:h-[calc(100dvh-3.5rem)] lg:sticky lg:top-0 shrink-0 relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/30 shadow-inner">
             <MapView
               reports={filteredReports.filter((r) => !dismissedIds[r.id])}
               disputeRecords={disputeRecords}
@@ -834,8 +835,8 @@ export const App: React.FC = () => {
             />
           </section>
 
-          {/* Right 55% - Spacious Report Feed */}
-          <section className="w-full flex-1 lg:w-[55%] lg:h-full flex flex-col bg-[#F1F5F9] lg:overflow-hidden">
+          {/* Right 55% - Unified Single-Column Scrolling Report Feed */}
+          <section className="w-full flex-1 lg:w-[55%] lg:h-[calc(100dvh-3.5rem)] lg:overflow-y-auto overscroll-contain flex flex-col bg-[#F1F5F9] scroll-smooth">
             {/* Deep Midnight Slate Sticky RBAC & Filter Controls */}
             <div className="bg-[#0B1120] text-white px-5 py-3 border-b border-slate-800 shrink-0 space-y-2.5 shadow-md">
               {/* Role Governance Bar: Full 4-Role Switcher when Signed In, or Read-Only Sign-In CTA when Logged Out */}
@@ -1045,7 +1046,7 @@ export const App: React.FC = () => {
             {/* Feed Cards List */}
             <div
               ref={cardListRef}
-              className="flex-1 lg:overflow-y-auto p-5 space-y-4 bg-[#F1F5F9]"
+              className="flex-1 min-h-[60vh] p-5 pb-16 space-y-4 bg-[#F1F5F9]"
             >
               {loading && reports.length === 0 ? (
                 <div className="space-y-4">
@@ -1185,9 +1186,10 @@ export const App: React.FC = () => {
           onOpenCaseStory={(rep) => setCaseStoryReportId(rep.id)}
         />
       )}
+      </main>
 
-      {/* OFFICIAL HACKATHON CREDITS FOOTER BAR */}
-      <footer className="bg-[#0B1120] border-t border-slate-800/90 text-slate-400 px-6 py-1.5 flex items-center justify-between text-xs shrink-0 select-none z-20 flex-wrap gap-2">
+      {/* OFFICIAL HACKATHON CREDITS FOOTER BAR (Static bottom-of-page footer) */}
+      <footer className="mt-auto bg-[#0B1120] border-t border-slate-800/90 text-slate-400 px-6 py-3 flex items-center justify-between text-xs select-none flex-wrap gap-2">
         <div className="flex items-center gap-2 font-semibold text-slate-300">
           <span className="w-2 h-2 rounded-full bg-emerald-400" />
           <span>Jan Drishti (&ldquo;Through the Eyes of the People&rdquo;) • Civic Accountability &amp; Truth Engine</span>

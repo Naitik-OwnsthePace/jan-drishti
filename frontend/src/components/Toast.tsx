@@ -30,15 +30,17 @@ export const ToastContainer: React.FC<ToastProps> = ({ toasts, onDismiss }) => {
         return (
           <div
             key={toast.id}
-            className={`pointer-events-auto flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 animate-slide-up ${bg}`}
+            className={`pointer-events-none flex items-center justify-between gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all duration-300 animate-slide-up ${bg}`}
           >
             <div className="flex items-center gap-2.5 text-xs font-semibold">
               {icon}
               <span>{toast.message}</span>
             </div>
             <button
+              type="button"
+              aria-label="Dismiss notification"
               onClick={() => onDismiss(toast.id)}
-              className="p-1 rounded-md opacity-70 hover:opacity-100 transition-opacity"
+              className="pointer-events-auto p-1 rounded-md opacity-70 hover:opacity-100 transition-opacity"
             >
               <X className="w-3.5 h-3.5" />
             </button>

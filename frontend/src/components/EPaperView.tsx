@@ -224,7 +224,7 @@ export const EPaperView: React.FC<EPaperViewProps> = ({
   );
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#E2E8F0] py-6">
+    <div className="flex-1 bg-[#E2E8F0] pt-6 pb-8">
       <div className="w-full max-w-[1440px] mx-auto px-6 lg:px-10">
         {/* Top Floating e-Paper Controls */}
         <div className="w-full mb-5 flex flex-wrap items-center justify-between gap-3 bg-[#0B1120] text-white px-6 py-3.5 rounded-2xl shadow-lg border border-slate-800">
