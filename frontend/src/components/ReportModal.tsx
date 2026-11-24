@@ -82,14 +82,14 @@ export const ReportModal: React.FC<ReportModalProps> = ({
     setLoadingSample(true);
     setErrorMessage(null);
     try {
-      const res = await fetch('/evidence/wire_before.jpg');
+      const res = await fetch('/evidence/wire_cables_before.jpg');
       const blob = await res.blob();
       const sampleFile = new File([blob], 'KP3_LiveWire_FieldCapture.jpg', {
         type: 'image/jpeg',
       });
       setFile(sampleFile);
       setCustomDataUrl(null);
-      setPreviewUrl('/evidence/wire_before.jpg');
+      setPreviewUrl('/evidence/wire_cables_before.jpg');
       if (!userNote.trim()) {
         setUserNote(
           'Exposed overhead electrical distribution wires hanging near student hostel footpath.'

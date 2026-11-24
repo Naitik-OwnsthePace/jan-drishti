@@ -309,7 +309,7 @@ def extract_exif_forensics(image_bytes: bytes, submitted_lat: float, submitted_l
     return forensics
 
 
-# Realistic 16-Report Greater Noida Civic Dataset (Real Local /evidence/*.jpg Photos)
+# Realistic 16-Report Greater Noida Civic Dataset (13 Unique Incident Before/After Pairs)
 SEED_REPORTS_16 = [
     # --- KNOWLEDGE PARK III (7 Reports: 3 Overdue, 2 Action Needed, 1 Needs Check, 1 Fixed & Verified; 4-Report Cluster) ---
     {
@@ -322,7 +322,7 @@ SEED_REPORTS_16 = [
         "locality": "Knowledge Park III",
         "lat": 28.4748,
         "lng": 77.4820,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_box_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -341,15 +341,15 @@ SEED_REPORTS_16 = [
     },
     {
         "id": "e3e027d6-3b50-4474-90b6-32c247571e3c",
-        "title": "Unshielded Underground Feeder Cable & Sparking Pole Base",
-        "summary": "Torn high-voltage armored cable protruding onto wet pavement; complete streetlight blackout along 300m institutional corridor.",
+        "title": "Corroborating Report #2: Open 11kV Hostel Gate Junction Box & Live Busbars",
+        "summary": "Second independent citizen capture confirming exposed copper busbars and unshielded feeder terminals inside the open 11kV box at Hostel Gate.",
         "category": "Electrical Hazard",
         "severity": 9.0,
         "status": "SLA_BREACHED",
         "locality": "Knowledge Park III",
         "lat": 28.4751,
         "lng": 77.4824,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_box_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -368,15 +368,15 @@ SEED_REPORTS_16 = [
     },
     {
         "id": "f235ac9b-23e8-4558-b3d2-de36421dcc3d",
-        "title": "Third Citizen Report: Live Wire Sparking Near Campus Main Gate",
-        "summary": "Corroborating citizen photo confirming arcing electrical distribution box directly outside hostel bus stop during evening rush.",
+        "title": "Corroborating Report #3: Arcing 11kV Junction Box Outside Hostel Bus Stop",
+        "summary": "Third citizen photo confirming live sparking from the exact same open 11kV distribution box outside the student hostel gate during evening rush.",
         "category": "Electrical Hazard",
         "severity": 8.8,
         "status": "SLA_BREACHED",
         "locality": "Knowledge Park III",
         "lat": 28.4749,
         "lng": 77.4822,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_box_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -395,15 +395,15 @@ SEED_REPORTS_16 = [
     },
     {
         "id": "kp3-0004-4d78-b2ee-5aa6e9f33604",
-        "title": "Fourth Corroboration: Transformer Oil Leak & Unlatched Fuse Cage",
-        "summary": "Step-down 440V transformer leaking dielectric oil onto sidewalk within 150m of the exposed hostel feeder pillar.",
+        "title": "Corroborating Report #4: Unlatched 11kV Feeder Box & Transformer at Hostel Gate",
+        "summary": "Fourth independent citizen submission documenting the open 11kV hostel gate junction box and leaking step-down transformer enclosure.",
         "category": "Electrical Hazard",
         "severity": 8.5,
         "status": "ESCALATED",
         "locality": "Knowledge Park III",
         "lat": 28.4747,
         "lng": 77.4819,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_box_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -430,7 +430,7 @@ SEED_REPORTS_16 = [
         "locality": "Knowledge Park III",
         "lat": 28.4772,
         "lng": 77.4855,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_streetlight_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -457,7 +457,7 @@ SEED_REPORTS_16 = [
         "locality": "Knowledge Park III",
         "lat": 28.4728,
         "lng": 77.4792,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_cables_before.jpg",
         "after_image_url": None,
         "exif_verified": False,
         "exif_metadata": {
@@ -484,8 +484,8 @@ SEED_REPORTS_16 = [
         "locality": "Knowledge Park III",
         "lat": 28.4761,
         "lng": 77.4805,
-        "image_url": "/evidence/wire_before.jpg",
-        "after_image_url": "/evidence/wire_after.jpg",
+        "image_url": "/evidence/wire_pillar_before.jpg",
+        "after_image_url": "/evidence/wire_pillar_after.jpg",
         "exif_verified": True,
         "exif_metadata": {
             "device": "Google Pixel 8a",
@@ -501,7 +501,7 @@ SEED_REPORTS_16 = [
         "created_at": "2026-11-21T10:00:00+00:00",
         "resolved_at": "2026-11-21T21:00:00+00:00",
     },
-    # --- BETA 2 SECTOR (3 Reports: Waterlogging, Streetlight Outage, Road Crater) ---
+    # --- BETA 2 SECTOR (3 Reports: Waterlogging, Streetlight Outage, Uncovered Manhole) ---
     {
         "id": "aef4245b-991a-4caf-8fec-af9ddc781e8a",
         "title": "Severe Storm Drain Overflow & Knee-Deep Waterlogging in Block-C",
@@ -512,7 +512,7 @@ SEED_REPORTS_16 = [
         "locality": "Beta 2 Sector",
         "lat": 28.4812,
         "lng": 77.5085,
-        "image_url": "/evidence/drain_before.jpg",
+        "image_url": "/evidence/drain_overflow_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -539,7 +539,7 @@ SEED_REPORTS_16 = [
         "locality": "Beta 2 Sector",
         "lat": 28.4826,
         "lng": 77.5102,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_switchbox_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -558,15 +558,15 @@ SEED_REPORTS_16 = [
     },
     {
         "id": "beta2-0003-4caf-8fec-af9ddc781e03",
-        "title": "Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth",
-        "summary": "Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.",
-        "category": "Road Damage",
+        "title": "Uncovered Sewer Manhole & Broken Drain Chamber Near Mother Dairy Booth",
+        "summary": "Missing circular sewer manhole lid creating a deep open road trap on Beta-2 collector lane; EXIF stripped from forwarded upload.",
+        "category": "Drainage / Flood",
         "severity": 7.2,
         "status": "UNVERIFIED",
         "locality": "Beta 2 Sector",
         "lat": 28.4798,
         "lng": 77.5069,
-        "image_url": "/evidence/road_before.jpg",
+        "image_url": "/evidence/drain_manhole_before.jpg",
         "after_image_url": None,
         "exif_verified": False,
         "exif_metadata": {
@@ -594,7 +594,7 @@ SEED_REPORTS_16 = [
         "locality": "Pari Chowk",
         "lat": 28.4671,
         "lng": 77.5138,
-        "image_url": "/evidence/road_before.jpg",
+        "image_url": "/evidence/road_pothole_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -621,7 +621,7 @@ SEED_REPORTS_16 = [
         "locality": "Pari Chowk",
         "lat": 28.4684,
         "lng": 77.5152,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_gantry_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -648,7 +648,7 @@ SEED_REPORTS_16 = [
         "locality": "Pari Chowk",
         "lat": 28.4659,
         "lng": 77.5121,
-        "image_url": "/evidence/garbage_before.jpg",
+        "image_url": "/evidence/garbage_debris_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -676,8 +676,8 @@ SEED_REPORTS_16 = [
         "locality": "Alpha 1 Commercial Belt",
         "lat": 28.4789,
         "lng": 77.5012,
-        "image_url": "/evidence/garbage_before.jpg",
-        "after_image_url": "/evidence/garbage_after.jpg",
+        "image_url": "/evidence/garbage_dump_before.jpg",
+        "after_image_url": "/evidence/garbage_dump_after.jpg",
         "exif_verified": True,
         "exif_metadata": {
             "device": "Google Pixel 9",
@@ -703,8 +703,8 @@ SEED_REPORTS_16 = [
         "locality": "Alpha 1 Commercial Belt",
         "lat": 28.4801,
         "lng": 77.5028,
-        "image_url": "/evidence/road_before.jpg",
-        "after_image_url": "/evidence/road_after.jpg",
+        "image_url": "/evidence/road_footpath_before.jpg",
+        "after_image_url": "/evidence/road_footpath_after.jpg",
         "exif_verified": True,
         "exif_metadata": {
             "device": "Samsung Galaxy S24",
@@ -730,7 +730,7 @@ SEED_REPORTS_16 = [
         "locality": "Alpha 1 Commercial Belt",
         "lat": 28.4776,
         "lng": 77.4998,
-        "image_url": "/evidence/wire_before.jpg",
+        "image_url": "/evidence/wire_fuse_before.jpg",
         "after_image_url": None,
         "exif_verified": True,
         "exif_metadata": {
@@ -1195,15 +1195,53 @@ async def resolve_with_proof(
         if provided_after:
             after_url = provided_after
         else:
-            existing_cat = str(LIVE_DEMO_REPORTS.get(report_id, {}).get("category", "")).lower()
-            if "road" in existing_cat:
-                after_url = "/evidence/road_after.jpg"
-            elif "drain" in existing_cat or "water" in existing_cat or "flood" in existing_cat:
-                after_url = "/evidence/drain_after.jpg"
-            elif "sanitation" in existing_cat or "dump" in existing_cat:
-                after_url = "/evidence/garbage_after.jpg"
+            incident_after_map = {
+                "60722f33-473f-4bd5-a892-56ffc5ecd8dc": "/evidence/wire_box_after.jpg",
+                "e3e027d6-3b50-4474-90b6-32c247571e3c": "/evidence/wire_box_after.jpg",
+                "f235ac9b-23e8-4558-b3d2-de36421dcc3d": "/evidence/wire_box_after.jpg",
+                "kp3-0004-4d78-b2ee-5aa6e9f33604": "/evidence/wire_box_after.jpg",
+                "kp3-0005-4d78-b2ee-5aa6e9f33605": "/evidence/wire_streetlight_after.jpg",
+                "kp3-0006-4d78-b2ee-5aa6e9f33606": "/evidence/wire_cables_after.jpg",
+                "kp3-0007-4d78-b2ee-5aa6e9f33607": "/evidence/wire_pillar_after.jpg",
+                "aef4245b-991a-4caf-8fec-af9ddc781e8a": "/evidence/drain_overflow_after.jpg",
+                "beta2-0002-4caf-8fec-af9ddc781e02": "/evidence/wire_switchbox_after.jpg",
+                "beta2-0003-4caf-8fec-af9ddc781e03": "/evidence/drain_manhole_after.jpg",
+                "e16f0eaf-4185-48e1-8d9b-f9a30d16af9c": "/evidence/road_pothole_after.jpg",
+                "pari-0002-48e1-8d9b-f9a30d16af02": "/evidence/wire_gantry_after.jpg",
+                "pari-0003-48e1-8d9b-f9a30d16af03": "/evidence/garbage_debris_after.jpg",
+                "b4ce4914-ae8e-44db-82dd-1072fa2bc257": "/evidence/garbage_dump_after.jpg",
+                "alpha1-0002-44db-82dd-1072fa2bc202": "/evidence/road_footpath_after.jpg",
+                "alpha1-0003-44db-82dd-1072fa2bc203": "/evidence/wire_fuse_after.jpg",
+            }
+            if report_id in incident_after_map:
+                after_url = incident_after_map[report_id]
             else:
-                after_url = "/evidence/wire_after.jpg"
+                existing = LIVE_DEMO_REPORTS.get(report_id, {})
+                text_sig = f"{existing.get('category', '')} {existing.get('title', '')}".lower()
+                if "manhole" in text_sig or "sewer" in text_sig:
+                    after_url = "/evidence/drain_manhole_after.jpg"
+                elif "drain" in text_sig or "water" in text_sig or "flood" in text_sig:
+                    after_url = "/evidence/drain_overflow_after.jpg"
+                elif "footpath" in text_sig or "trench" in text_sig or "curb" in text_sig:
+                    after_url = "/evidence/road_footpath_after.jpg"
+                elif "road" in text_sig or "pothole" in text_sig:
+                    after_url = "/evidence/road_pothole_after.jpg"
+                elif "debris" in text_sig or "rubble" in text_sig or "dump" in text_sig:
+                    after_url = "/evidence/garbage_debris_after.jpg"
+                elif "sanitation" in text_sig or "garbage" in text_sig or "waste" in text_sig:
+                    after_url = "/evidence/garbage_dump_after.jpg"
+                elif "streetlight" in text_sig:
+                    after_url = "/evidence/wire_streetlight_after.jpg"
+                elif "switchbox" in text_sig:
+                    after_url = "/evidence/wire_switchbox_after.jpg"
+                elif "gantry" in text_sig:
+                    after_url = "/evidence/wire_gantry_after.jpg"
+                elif "fuse" in text_sig:
+                    after_url = "/evidence/wire_fuse_after.jpg"
+                elif "junction box" in text_sig or "11kv" in text_sig:
+                    after_url = "/evidence/wire_box_after.jpg"
+                else:
+                    after_url = "/evidence/wire_cables_after.jpg"
 
     if report_id in LIVE_DEMO_REPORTS:
         LIVE_DEMO_REPORTS[report_id]["status"] = "RESOLVED"
@@ -1293,12 +1331,12 @@ def _offline_hindi_translate(text: str) -> str:
     exact_map = {
         "Exposed High-Tension 11kV Junction Box Near Student Hostel Gate": "छात्र हॉस्टल गेट के पास खुला 11kV हाई-टेंशन जंक्शन बॉक्स — गंभीर जनसुरक्षा संकट",
         "Open electrical feeder pillar with live exposed copper busbars beside main pedestrian footpath used by 4,000+ engineering students daily.": "प्रतिदिन 4,000+ इंजीनियरिंग छात्रों द्वारा उपयोग किए जाने वाले मुख्य पैदल फुटपाथ के बगल में खुले तांबे के तारों वाला चालू विद्युत फीडर पिलर।",
-        "Unshielded Underground Feeder Cable & Sparking Pole Base": "असुरक्षित भूमिगत फीडर केबल और खंभे के आधार से निकलती चिंगारी",
-        "Torn high-voltage armored cable protruding onto wet pavement; complete streetlight blackout along 300m institutional corridor.": "गीले फुटपाथ पर निकली हुई हाई-वोल्टेज केबल; 300 मीटर संस्थागत कॉरिडोर में पूर्ण स्ट्रीटलाइट ब्लैकआउट।",
-        "Third Citizen Report: Live Wire Sparking Near Campus Main Gate": "तीसरी नागरिक रिपोर्ट: कैंपस मुख्य गेट के पास खुले बिजली के तार से चिंगारी",
-        "Corroborating citizen photo confirming arcing electrical distribution box directly outside hostel bus stop during evening rush.": "शाम की भीड़ के दौरान हॉस्टल बस स्टॉप के ठीक बाहर चिंगारी निकलते विद्युत वितरण बॉक्स की पुष्टि करने वाला प्रमाणित नागरिक फोटो।",
-        "Fourth Corroboration: Transformer Oil Leak & Unlatched Fuse Cage": "चौथा नागरिक प्रमाण: ट्रांसफार्मर से तेल रिसाव और खुला फ्यूज केज",
-        "Step-down 440V transformer leaking dielectric oil onto sidewalk within 150m of the exposed hostel feeder pillar.": "खुले हॉस्टल फीडर पिलर के 150 मीटर के भीतर फुटपाथ पर 440V ट्रांसफार्मर से तेल का रिसाव।",
+        "Corroborating Report #2: Open 11kV Hostel Gate Junction Box & Live Busbars": "दूसरा नागरिक प्रमाण: हॉस्टल गेट के पास खुला 11kV जंक्शन बॉक्स और नंगे तांबे के बसबार",
+        "Second independent citizen capture confirming exposed copper busbars and unshielded feeder terminals inside the open 11kV box at Hostel Gate.": "हॉस्टल गेट पर खुले 11kV बॉक्स के भीतर खुले तांबे के बसबार और असुरक्षित फीडर टर्मिनल की पुष्टि करने वाला दूसरा स्वतंत्र नागरिक फोटो।",
+        "Corroborating Report #3: Arcing 11kV Junction Box Outside Hostel Bus Stop": "तीसरा नागरिक प्रमाण: हॉस्टल बस स्टॉप के बाहर उसी 11kV जंक्शन बॉक्स से चिंगारी",
+        "Third citizen photo confirming live sparking from the exact same open 11kV distribution box outside the student hostel gate during evening rush.": "शाम की भीड़ के दौरान छात्र हॉस्टल गेट के बाहर उसी खुले 11kV वितरण बॉक्स से निकलती चिंगारी की पुष्टि करने वाला तीसरा फोटो।",
+        "Corroborating Report #4: Unlatched 11kV Feeder Box & Transformer at Hostel Gate": "चौथा नागरिक प्रमाण: हॉस्टल गेट पर खुला 11kV फीडर बॉक्स और ट्रांसफार्मर रिसाव",
+        "Fourth independent citizen submission documenting the open 11kV hostel gate junction box and leaking step-down transformer enclosure.": "हॉस्टल गेट पर खुले 11kV जंक्शन बॉक्स और ट्रांसफार्मर एनक्लोजर के खतरे को दर्ज करने वाली चौथी स्वतंत्र नागरिक रिपोर्ट।",
         "Severed Streetlight Conduit & Dark Campus Ring Road": "टूटा स्ट्रीटलाइट कंड्यूट और अंधेरे में डूबी कैंपस रिंग रोड",
         "Broken junction conduit leaving 8 consecutive municipal streetlights non-functional near Knowledge Park III internal roundabout.": "नॉलेज पार्क III आंतरिक गोलचक्कर के पास टूटे जंक्शन के कारण लगातार 8 स्ट्रीटलाइटें बंद।",
         "Dangling Overhead Cable Bundle Blocking Service Lane": "सर्विस लेन को अवरुद्ध करता लटकता ओवरहेड केबल बंडल",
@@ -1309,8 +1347,8 @@ def _offline_hindi_translate(text: str) -> str:
         "Choked primary storm drainage canal causing stagnant waterlogging across residential approach road for over 36 hours.": "अवरुद्ध मुख्य जल निकासी नहर के कारण 36 घंटे से अधिक समय से आवासीय सड़क पर गंभीर जलभराव।",
         "Beta-2 Internal Market Streetlight Outage & Open Pole Switchbox": "बीटा-2 आंतरिक मार्केट में स्ट्रीटलाइट बंद और खुला पोल स्विचबॉक्स",
         "Exposed toggle switchgear at child height on pole #B2-19 accompanied by complete darkness along residential park lane.": "पोल #B2-19 पर कम ऊंचाई पर खुला स्विचगियर और आवासीय पार्क लेन में पूर्ण अंधेरा।",
-        "Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth": "मदर डेयरी बूथ के पास टूटी डामर सड़क और गहरा जानलेवा गड्ढा",
-        "Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.": "सेक्टर रोड पर धंसी हुई डामर सड़क से 2 फुट चौड़ा खतरनाक गड्ढा।",
+        "Uncovered Sewer Manhole & Broken Drain Chamber Near Mother Dairy Booth": "मदर डेयरी बूथ के पास बिना ढक्कन का खुला सीवर मैनहोल और टूटा चैंबर",
+        "Missing circular sewer manhole lid creating a deep open road trap on Beta-2 collector lane; EXIF stripped from forwarded upload.": "बीटा-2 कलेक्टर लेन पर ढक्कन गायब होने से खुला गहरा सीवर मैनहोल जानलेवा गड्ढा बन गया है; फॉरवर्ड किए गए फोटो में EXIF अनुपस्थित।",
         "Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road": "परी चौक स्लिप रोड पर गहरा सड़क गड्ढा और टूटी डामर सतह",
         "Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.": "बिना बैरिकेडिंग के 1.8 फुट गहरा डामर सड़क का गड्ढा, जिससे दोपहिया वाहन दुर्घटनाग्रस्त हो रहे हैं।",
         "Traffic Signal Gantry High-Voltage Supply Wire Hanging Over Crosswalk": "जेब्रा क्रॉसिंग के ऊपर लटकता ट्रैफिक सिग्नल का हाई-वोल्टेज तार",

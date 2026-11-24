@@ -28,7 +28,7 @@ const customImageRegistry: Record<string, { before?: string; after?: string }> =
 // Client-side in-memory + localStorage cache for instant (0ms) Press & RTI Dossiers per hotspot ID
 const pressKitMemoryCache: Record<string, PressKitData> = {};
 const hindiTranslationCache: Record<string, string> = {};
-const PRESS_KIT_STORAGE_KEY = 'jandrishti_presskit_cache_v5';
+const PRESS_KIT_STORAGE_KEY = 'jandrishti_presskit_cache_v6';
 
 // Offline-resilient 16-report Greater Noida dataset fallback (mirrors backend SEED_REPORTS_16)
 export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
@@ -43,7 +43,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Knowledge Park III',
     lat: 28.4748,
     lng: 77.482,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_box_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -62,16 +62,16 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'e3e027d6-3b50-4474-90b6-32c247571e3c',
-    title: 'Unshielded Underground Feeder Cable & Sparking Pole Base',
+    title: 'Corroborating Report #2: Open 11kV Hostel Gate Junction Box & Live Busbars',
     summary:
-      'Torn high-voltage armored cable protruding onto wet pavement; complete streetlight blackout along 300m institutional corridor.',
+      'Second independent citizen capture confirming exposed copper busbars and unshielded feeder terminals inside the open 11kV box at Hostel Gate.',
     category: 'Electrical Hazard',
     severity: 9.0,
     status: 'SLA_BREACHED',
     locality: 'Knowledge Park III',
     lat: 28.4751,
     lng: 77.4824,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_box_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -90,16 +90,16 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'f235ac9b-23e8-4558-b3d2-de36421dcc3d',
-    title: 'Third Citizen Report: Live Wire Sparking Near Campus Main Gate',
+    title: 'Corroborating Report #3: Arcing 11kV Junction Box Outside Hostel Bus Stop',
     summary:
-      'Corroborating citizen photo confirming arcing electrical distribution box directly outside hostel bus stop during evening rush.',
+      'Third citizen photo confirming live sparking from the exact same open 11kV distribution box outside the student hostel gate during evening rush.',
     category: 'Electrical Hazard',
     severity: 8.8,
     status: 'SLA_BREACHED',
     locality: 'Knowledge Park III',
     lat: 28.4749,
     lng: 77.4822,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_box_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -118,16 +118,16 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'kp3-0004-4d78-b2ee-5aa6e9f33604',
-    title: 'Fourth Corroboration: Transformer Oil Leak & Unlatched Fuse Cage',
+    title: 'Corroborating Report #4: Unlatched 11kV Feeder Box & Transformer at Hostel Gate',
     summary:
-      'Step-down 440V transformer leaking dielectric oil onto sidewalk within 150m of the exposed hostel feeder pillar.',
+      'Fourth independent citizen submission documenting the open 11kV hostel gate junction box and leaking step-down transformer enclosure.',
     category: 'Electrical Hazard',
     severity: 8.5,
     status: 'ESCALATED',
     locality: 'Knowledge Park III',
     lat: 28.4747,
     lng: 77.4819,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_box_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -155,7 +155,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Knowledge Park III',
     lat: 28.4772,
     lng: 77.4855,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_streetlight_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -183,7 +183,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Knowledge Park III',
     lat: 28.4728,
     lng: 77.4792,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_cables_before.jpg',
     after_image_url: null,
     exif_verified: false,
     exif_metadata: {
@@ -211,8 +211,8 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Knowledge Park III',
     lat: 28.4761,
     lng: 77.4805,
-    image_url: '/evidence/wire_before.jpg',
-    after_image_url: '/evidence/wire_after.jpg',
+    image_url: '/evidence/wire_pillar_before.jpg',
+    after_image_url: '/evidence/wire_pillar_after.jpg',
     exif_verified: true,
     exif_metadata: {
       device: 'Google Pixel 8a',
@@ -239,7 +239,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Beta 2 Sector',
     lat: 28.4812,
     lng: 77.5085,
-    image_url: '/evidence/drain_before.jpg',
+    image_url: '/evidence/drain_overflow_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -267,7 +267,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Beta 2 Sector',
     lat: 28.4826,
     lng: 77.5102,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_switchbox_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -286,16 +286,16 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
   },
   {
     id: 'beta2-0003-4caf-8fec-af9ddc781e03',
-    title: 'Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth',
+    title: 'Uncovered Sewer Manhole & Broken Drain Chamber Near Mother Dairy Booth',
     summary:
-      'Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.',
-    category: 'Road Damage',
+      'Missing circular sewer manhole lid creating a deep open road trap on Beta-2 collector lane; EXIF stripped from forwarded upload.',
+    category: 'Drainage / Flood',
     severity: 7.2,
     status: 'UNVERIFIED',
     locality: 'Beta 2 Sector',
     lat: 28.4798,
     lng: 77.5069,
-    image_url: '/evidence/road_before.jpg',
+    image_url: '/evidence/drain_manhole_before.jpg',
     after_image_url: null,
     exif_verified: false,
     exif_metadata: {
@@ -323,7 +323,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Pari Chowk',
     lat: 28.4671,
     lng: 77.5138,
-    image_url: '/evidence/road_before.jpg',
+    image_url: '/evidence/road_pothole_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -351,7 +351,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Pari Chowk',
     lat: 28.4684,
     lng: 77.5152,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_gantry_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -379,7 +379,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Pari Chowk',
     lat: 28.4659,
     lng: 77.5121,
-    image_url: '/evidence/garbage_before.jpg',
+    image_url: '/evidence/garbage_debris_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -407,8 +407,8 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Alpha 1 Commercial Belt',
     lat: 28.4789,
     lng: 77.5012,
-    image_url: '/evidence/garbage_before.jpg',
-    after_image_url: '/evidence/garbage_after.jpg',
+    image_url: '/evidence/garbage_dump_before.jpg',
+    after_image_url: '/evidence/garbage_dump_after.jpg',
     exif_verified: true,
     exif_metadata: {
       device: 'Google Pixel 9',
@@ -435,8 +435,8 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Alpha 1 Commercial Belt',
     lat: 28.4801,
     lng: 77.5028,
-    image_url: '/evidence/road_before.jpg',
-    after_image_url: '/evidence/road_after.jpg',
+    image_url: '/evidence/road_footpath_before.jpg',
+    after_image_url: '/evidence/road_footpath_after.jpg',
     exif_verified: true,
     exif_metadata: {
       device: 'Samsung Galaxy S24',
@@ -463,7 +463,7 @@ export const CLIENT_FALLBACK_REPORTS_16: Report[] = [
     locality: 'Alpha 1 Commercial Belt',
     lat: 28.4776,
     lng: 77.4998,
-    image_url: '/evidence/wire_before.jpg',
+    image_url: '/evidence/wire_fuse_before.jpg',
     after_image_url: null,
     exif_verified: true,
     exif_metadata: {
@@ -783,7 +783,7 @@ export async function submitReport(
       preservedCustomUrl
         ? Promise.resolve(preservedCustomUrl)
         : isSampleDemoFile
-        ? Promise.resolve('/evidence/wire_before.jpg')
+        ? Promise.resolve('/evidence/wire_cables_before.jpg')
         : compressImageFileToDataUrl(file, 900, 0.8),
     ]);
 

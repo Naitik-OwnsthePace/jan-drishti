@@ -33,18 +33,18 @@ const LOCAL_HINDI_FALLBACK: Record<string, string> = {
     'छात्र हॉस्टल गेट के पास खुला 11kV हाई-टेंशन जंक्शन बॉक्स — गंभीर जनसुरक्षा संकट',
   'Open electrical feeder pillar with live exposed copper busbars beside main pedestrian footpath used by 4,000+ engineering students daily.':
     'प्रतिदिन 4,000+ इंजीनियरिंग छात्रों द्वारा उपयोग किए जाने वाले मुख्य पैदल फुटपाथ के बगल में खुले तांबे के तारों वाला चालू विद्युत फीडर पिलर।',
-  'Unshielded Underground Feeder Cable & Sparking Pole Base':
-    'असुरक्षित भूमिगत फीडर केबल और खंभे के आधार से निकलती चिंगारी',
-  'Torn high-voltage armored cable protruding onto wet pavement; complete streetlight blackout along 300m institutional corridor.':
-    'गीले फुटपाथ पर निकली हुई हाई-वोल्टेज केबल; 300 मीटर संस्थागत कॉरिडोर में पूर्ण स्ट्रीटलाइट ब्लैकआउट।',
-  'Third Citizen Report: Live Wire Sparking Near Campus Main Gate':
-    'तीसरी नागरिक रिपोर्ट: कैंपस मुख्य गेट के पास खुले बिजली के तार से चिंगारी',
-  'Corroborating citizen photo confirming arcing electrical distribution box directly outside hostel bus stop during evening rush.':
-    'शाम की भीड़ के दौरान हॉस्टल बस स्टॉप के ठीक बाहर चिंगारी निकलते विद्युत वितरण बॉक्स की पुष्टि करने वाला प्रमाणित नागरिक फोटो।',
-  'Fourth Corroboration: Transformer Oil Leak & Unlatched Fuse Cage':
-    'चौथा नागरिक प्रमाण: ट्रांसफार्मर से तेल रिसाव और खुला फ्यूज केज',
-  'Step-down 440V transformer leaking dielectric oil onto sidewalk within 150m of the exposed hostel feeder pillar.':
-    'खुले हॉस्टल फीडर पिलर के 150 मीटर के भीतर फुटपाथ पर 440V ट्रांसफार्मर से तेल का रिसाव।',
+  'Corroborating Report #2: Open 11kV Hostel Gate Junction Box & Live Busbars':
+    'दूसरा नागरिक प्रमाण: हॉस्टल गेट के पास खुला 11kV जंक्शन बॉक्स और नंगे तांबे के बसबार',
+  'Second independent citizen capture confirming exposed copper busbars and unshielded feeder terminals inside the open 11kV box at Hostel Gate.':
+    'हॉस्टल गेट पर खुले 11kV बॉक्स के भीतर खुले तांबे के बसबार और असुरक्षित फीडर टर्मिनल की पुष्टि करने वाला दूसरा स्वतंत्र नागरिक फोटो।',
+  'Corroborating Report #3: Arcing 11kV Junction Box Outside Hostel Bus Stop':
+    'तीसरा नागरिक प्रमाण: हॉस्टल बस स्टॉप के बाहर उसी 11kV जंक्शन बॉक्स से चिंगारी',
+  'Third citizen photo confirming live sparking from the exact same open 11kV distribution box outside the student hostel gate during evening rush.':
+    'शाम की भीड़ के दौरान छात्र हॉस्टल गेट के बाहर उसी खुले 11kV वितरण बॉक्स से निकलती चिंगारी की पुष्टि करने वाला तीसरा फोटो।',
+  'Corroborating Report #4: Unlatched 11kV Feeder Box & Transformer at Hostel Gate':
+    'चौथा नागरिक प्रमाण: हॉस्टल गेट पर खुला 11kV फीडर बॉक्स और ट्रांसफार्मर रिसाव',
+  'Fourth independent citizen submission documenting the open 11kV hostel gate junction box and leaking step-down transformer enclosure.':
+    'हॉस्टल गेट पर खुले 11kV जंक्शन बॉक्स और ट्रांसफार्मर एनक्लोजर के खतरे को दर्ज करने वाली चौथी स्वतंत्र नागरिक रिपोर्ट।',
   'Severed Streetlight Conduit & Dark Campus Ring Road':
     'टूटा स्ट्रीटलाइट कंड्यूट और अंधेरे में डूबी कैंपस रिंग रोड',
   'Broken junction conduit leaving 8 consecutive municipal streetlights non-functional near Knowledge Park III internal roundabout.':
@@ -65,10 +65,10 @@ const LOCAL_HINDI_FALLBACK: Record<string, string> = {
     'बीटा-2 आंतरिक मार्केट में स्ट्रीटलाइट बंद और खुला पोल स्विचबॉक्स',
   'Exposed toggle switchgear at child height on pole #B2-19 accompanied by complete darkness along residential park lane.':
     'पोल #B2-19 पर कम ऊंचाई पर खुला स्विचगियर और आवासीय पार्क लेन में पूर्ण अंधेरा।',
-  'Collapsed Asphalt Road & Deep Pothole Crater Near Mother Dairy Booth':
-    'मदर डेयरी बूथ के पास टूटी डामर सड़क और गहरा जानलेवा गड्ढा',
-  'Caved-in asphalt road slab creating a 2-foot wide wheel trap on sector collector road; EXIF stripped from forwarded upload.':
-    'सेक्टर रोड पर धंसी हुई डामर सड़क से 2 फुट चौड़ा खतरनाक गड्ढा।',
+  'Uncovered Sewer Manhole & Broken Drain Chamber Near Mother Dairy Booth':
+    'मदर डेयरी बूथ के पास बिना ढक्कन का खुला सीवर मैनहोल और टूटा चैंबर',
+  'Missing circular sewer manhole lid creating a deep open road trap on Beta-2 collector lane; EXIF stripped from forwarded upload.':
+    'बीटा-2 कलेक्टर लेन पर ढक्कन गायब होने से खुला गहरा सीवर मैनहोल जानलेवा गड्ढा बन गया है; फॉरवर्ड किए गए फोटो में EXIF अनुपस्थित।',
   'Deep Arterial Pothole & Collapsed Asphalt Crater at Pari Chowk Slip Road':
     'परी चौक स्लिप रोड पर गहरा सड़क गड्ढा और टूटी डामर सतह',
   'Unbarricaded 1.8-foot deep asphalt road cavity and fractured concrete slab causing high-speed two-wheeler skids.':
